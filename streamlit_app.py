@@ -19,19 +19,30 @@ PLANILHA = "Clientes Shopify"
 df = carregar_aba(PLANILHA, "Clientes Shopify")
 df.columns = df.columns.str.strip()
 
-# ---------------- MAPA DE PRIORIDADE ----------------
-PRIORIDADE_MAP = {
-    "🚨 Campeão": 1,
-    "🚨 Leal": 2,
-    "Campeão": 3,
-    "Leal": 4,
-    "Promissor": 5,
-    "Novo": 6,
-    "Dormente": 7,
-    "Não comprou ainda": 8,
-}
+# Garante string
+df["Classificação"] = df["Classificação"].astype(str)
 
-df["Prioridade"] = df["Classificação"].map(PRIORIDADE_MAP).fillna(99).astype(int)
+# ---------------- PRIORIDADE (ROBUSTA) ----------------
+def calcular_prioridade(classificacao: str) -> int:
+    if "🚨" in classificacao and "Campeão" in classificacao:
+        return 1
+    if "🚨" in classificacao and "Leal" in classificacao:
+        return 2
+    if "Campeão" in classificacao:
+        return 3
+    if "Leal" in classificacao:
+        return 4
+    if "Promissor" in classificacao:
+        return 5
+    if "Novo" in classificacao:
+        return 6
+    if "Dormente" in classificacao:
+        return 7
+    if "Não comprou ainda" in classificacao:
+        return 8
+    return 99
+
+df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
 # ---------------- KPIs ----------------
 st.subheader("📊 Visão Geral")
@@ -39,9 +50,27 @@ st.subheader("📊 Visão Geral")
 c1, c2, c3, c4 = st.columns(4)
 
 c1.metric("Total clientes", len(df))
-c2.metric("🚨 Campeões", (df["Classificação"] == "🚨 Campeão").sum())
-c3.metric("🚨 Leais", (df["Classificação"] == "🚨 Leal").sum())
-c4.metric("Dormentes", (df["Classificação"] == "Dormente").sum())
+
+c2.metric(
+    "🚨 Campeões",
+    (
+        df["Classificação"].str.contains("🚨", na=False) &
+        df["Classificação"].str.contains("Campeão", na=False)
+    ).sum()
+)
+
+c3.metric(
+    "🚨 Leais",
+    (
+        df["Classificação"].str.contains("🚨", na=False) &
+        df["Classificação"].str.contains("Leal", na=False)
+    ).sum()
+)
+
+c4.metric(
+    "Dormentes",
+    df["Classificação"].str.contains("Dormente", na=False).sum()
+)
 
 # ---------------- FILTROS ----------------
 st.divider()

@@ -46,7 +46,7 @@ df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 # ======================================================
 # 🚨 AÇÃO IMEDIATA — EM RISCO
 # ======================================================
-st.subheader("🚨 Ação imediata (Em risco)")
+st.subheader("🚨 Em Risco / Ação imediata")
 
 df_risco = df[df["Classificação"].str.contains("🚨", na=False)]
 
@@ -122,7 +122,7 @@ st.divider()
 # ======================================================
 # 💤 BACKLOG / REATIVAÇÃO
 # ======================================================
-st.subheader("💤 Backlog / Reativação")
+st.subheader("💤 Dormentes / Reativação")
 
 df_dorm = df[df["Classificação"].str.contains("💤", na=False)]
 

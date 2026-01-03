@@ -2,42 +2,62 @@ import streamlit as st
 import pandas as pd
 from utils.sheets import carregar_aba
 
-# ---------------- CONFIG ----------------
+# ======================================================
+# CONFIG
+# ======================================================
 st.set_page_config(
     page_title="Pós-vendas SporTech",
     layout="wide"
 )
 
 st.title("📦 Dashboard Pós-vendas — SporTech")
-st.caption("Painel operacional por filas de trabalho")
+st.caption("Painel operacional por filas de trabalho (Shopify → Planilha → Streamlit)")
 st.divider()
 
-# ---------------- PLANILHA ----------------
+# ======================================================
+# LOAD PLANILHA
+# ======================================================
 PLANILHA = "Clientes Shopify"
 
 df = carregar_aba(PLANILHA, "Clientes Shopify")
 df.columns = df.columns.str.strip()
 df["Classificação"] = df["Classificação"].astype(str)
 
-# ---------------- PRIORIDADE ----------------
+# Garante colunas numéricas
+df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
+df["Valor Total Gasto"] = pd.to_numeric(
+    df["Valor Total Gasto"].astype(str)
+        .str.replace("R$", "", regex=False)
+        .str.replace(".", "", regex=False)
+        .str.replace(",", ".", regex=False),
+    errors="coerce"
+).fillna(0)
+
+# ======================================================
+# PRIORIDADE OPERACIONAL
+# ======================================================
 def calcular_prioridade(classificacao: str) -> int:
     c = classificacao.lower()
 
+    # 🚨 EM RISCO
     if "🚨" in classificacao and "campeão" in c: return 1
     if "🚨" in classificacao and "leal" in c: return 2
     if "🚨" in classificacao and "promissor" in c: return 3
     if "🚨" in classificacao and "novo" in c: return 4
 
+    # 🟢 ATIVOS
     if classificacao == "Campeão": return 5
     if classificacao == "Leal": return 6
     if classificacao == "Promissor": return 7
     if classificacao == "Novo": return 8
 
+    # 💤 DORMENTES
     if "💤" in classificacao and "campeão" in c: return 9
     if "💤" in classificacao and "leal" in c: return 10
     if "💤" in classificacao and "promissor" in c: return 11
     if "💤" in classificacao and "novo" in c: return 12
 
+    # ⛔ FORA
     if "não comprou" in c: return 99
     return 100
 
@@ -46,20 +66,21 @@ df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 # ======================================================
 # 🚨 EM RISCO / AÇÃO IMEDIATA
 # ======================================================
-st.subheader("🚨 Em Risco / Ação imediata")
+st.subheader("🚨 Em risco — Ação imediata")
 
 df_risco = df[df["Classificação"].str.contains("🚨", na=False)]
 
 filtro_risco = st.multiselect(
-    "Filtrar em risco por nível",
+    "Filtrar por nível",
     options=["Campeão", "Leal", "Promissor", "Novo"],
     default=["Campeão", "Leal", "Promissor", "Novo"],
-    key="risco"
+    key="filtro_risco"
 )
 
-df_risco = df_risco[
-    df_risco["Classificação"].str.contains("|".join(filtro_risco), na=False)
-]
+if filtro_risco:
+    df_risco = df_risco[
+        df_risco["Classificação"].str.contains("|".join(filtro_risco), na=False)
+    ]
 
 df_risco = df_risco.sort_values(
     ["Prioridade", "Valor Total Gasto"],
@@ -96,13 +117,14 @@ df_ativo = df[
 ]
 
 filtro_ativo = st.multiselect(
-    "Filtrar base ativa por nível",
+    "Filtrar por nível",
     options=["Campeão", "Leal", "Promissor", "Novo"],
     default=["Campeão", "Leal", "Promissor", "Novo"],
-    key="ativo"
+    key="filtro_ativo"
 )
 
-df_ativo = df_ativo[df_ativo["Classificação"].isin(filtro_ativo)]
+if filtro_ativo:
+    df_ativo = df_ativo[df_ativo["Classificação"].isin(filtro_ativo)]
 
 df_ativo = df_ativo.sort_values(
     ["Prioridade", "Valor Total Gasto"],
@@ -130,20 +152,21 @@ st.divider()
 # ======================================================
 # 💤 DORMENTES / REATIVAÇÃO
 # ======================================================
-st.subheader("💤 Dormentes / Reativação")
+st.subheader("💤 Dormentes — Reativação")
 
 df_dorm = df[df["Classificação"].str.contains("💤", na=False)]
 
 filtro_dorm = st.multiselect(
-    "Filtrar dormentes por nível",
+    "Filtrar por nível",
     options=["Campeão", "Leal", "Promissor", "Novo"],
     default=["Campeão", "Leal", "Promissor", "Novo"],
-    key="dorm"
+    key="filtro_dorm"
 )
 
-df_dorm = df_dorm[
-    df_dorm["Classificação"].str.contains("|".join(filtro_dorm), na=False)
-]
+if filtro_dorm:
+    df_dorm = df_dorm[
+        df_dorm["Classificação"].str.contains("|".join(filtro_dorm), na=False)
+    ]
 
 df_dorm = df_dorm.sort_values(
     ["Prioridade", "Valor Total Gasto"],

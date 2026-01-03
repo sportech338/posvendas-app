@@ -36,14 +36,14 @@ def calcular_prioridade(classificacao: str) -> int:
     if "🚨" in classificacao and "novo" in c:
         return 4
 
-    # 🏆 NORMAIS
-    if "campeão" in c and "💤" not in classificacao:
+    # 🟢 ATIVOS (NORMAIS)
+    if "campeão" in c and "🚨" not in classificacao and "💤" not in classificacao:
         return 5
-    if "leal" in c and "💤" not in classificacao:
+    if "leal" in c and "🚨" not in classificacao and "💤" not in classificacao:
         return 6
-    if "promissor" in c and "💤" not in classificacao:
+    if "promissor" in c and "🚨" not in classificacao and "💤" not in classificacao:
         return 7
-    if "novo" in c and "💤" not in classificacao:
+    if "novo" in c and "🚨" not in classificacao and "💤" not in classificacao:
         return 8
 
     # 💤 DORMENTES (MENOR PRIORIDADE)
@@ -65,36 +65,53 @@ def calcular_prioridade(classificacao: str) -> int:
 
 df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
-# ---------------- KPIs ----------------
+# ---------------- VISÃO GERAL (CORRETA) ----------------
 st.subheader("📊 Visão Geral")
 
-c1, c2, c3, c4, c5 = st.columns(5)
+total_clientes = len(df)
 
-c1.metric("Total clientes", len(df))
+em_risco = df["Classificação"].str.contains("🚨", na=False).sum()
+dormentes = df["Classificação"].str.contains("💤", na=False).sum()
 
-c2.metric(
+ativos = (
+    ~df["Classificação"].str.contains("🚨", na=False) &
+    ~df["Classificação"].str.contains("💤", na=False) &
+    ~df["Classificação"].str.contains("não comprou", case=False, na=False)
+).sum()
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("👥 Total clientes", total_clientes)
+c2.metric("🚨 Em risco", em_risco)
+c3.metric("💤 Dormentes", dormentes)
+c4.metric("🟢 Ativos", ativos)
+
+# ---- Detalhe opcional de risco (nível) ----
+st.caption("Detalhamento dos clientes em risco")
+
+r1, r2, r3 = st.columns(3)
+
+r1.metric(
     "🚨 Campeões",
-    df["Classificação"].str.contains("🚨") &
-    df["Classificação"].str.contains("Campeão")
-)
-
-c3.metric(
-    "🚨 Leais",
-    df["Classificação"].str.contains("🚨") &
-    df["Classificação"].str.contains("Leal")
-)
-
-c4.metric(
-    "💤 Dormentes",
-    df["Classificação"].str.contains("💤").sum()
-)
-
-c5.metric(
-    "Campeões ativos",
     (
-        df["Classificação"].str.contains("Campeão") &
-        ~df["Classificação"].str.contains("🚨") &
-        ~df["Classificação"].str.contains("💤")
+        df["Classificação"].str.contains("🚨", na=False) &
+        df["Classificação"].str.contains("Campeão", na=False)
+    ).sum()
+)
+
+r2.metric(
+    "🚨 Leais",
+    (
+        df["Classificação"].str.contains("🚨", na=False) &
+        df["Classificação"].str.contains("Leal", na=False)
+    ).sum()
+)
+
+r3.metric(
+    "🚨 Promissores",
+    (
+        df["Classificação"].str.contains("🚨", na=False) &
+        df["Classificação"].str.contains("Promissor", na=False)
     ).sum()
 )
 
@@ -147,4 +164,3 @@ st.dataframe(
     use_container_width=True,
     height=520
 )
-

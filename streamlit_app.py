@@ -46,44 +46,6 @@ def calcular_prioridade(classificacao: str) -> int:
 
 df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
-# ---------------- VISÃO GERAL ----------------
-st.subheader("📊 Visão Geral — Prioridades do Pós-vendas")
-
-def conta(txt):
-    return df["Classificação"].str.contains(txt, na=False).sum()
-
-# ===== 🚨 EM RISCO (FOCO ABSOLUTO) =====
-st.markdown("### 🚨 Ação imediata (Em risco)")
-
-r1, r2, r3, r4 = st.columns(4)
-r1.metric("🚨 Campeão", conta("🚨 Campeão"))
-r2.metric("🚨 Leal", conta("🚨 Leal"))
-r3.metric("🚨 Promissor", conta("🚨 Promissor"))
-r4.metric("🚨 Novo", conta("🚨 Novo"))
-
-st.divider()
-
-# ===== 🟢 ATIVOS (CONTEXTO) =====
-st.markdown("### 🟢 Base ativa")
-
-a1, a2, a3, a4 = st.columns(4)
-a1.metric("Campeão", (df["Classificação"] == "Campeão").sum())
-a2.metric("Leal", (df["Classificação"] == "Leal").sum())
-a3.metric("Promissor", (df["Classificação"] == "Promissor").sum())
-a4.metric("Novo", (df["Classificação"] == "Novo").sum())
-
-st.divider()
-
-# ===== 💤 DORMENTES + ⛔ =====
-st.markdown("### 💤 Backlog / Reativação")
-
-d1, d2, d3, d4, d5 = st.columns(5)
-d1.metric("💤 Campeão", conta("💤 Campeão"))
-d2.metric("💤 Leal", conta("💤 Leal"))
-d3.metric("💤 Promissor", conta("💤 Promissor"))
-d4.metric("💤 Novo", conta("💤 Novo"))
-d5.metric("⛔ Não comprou", conta("Não comprou"))
-
 # ---------------- FILTROS ----------------
 st.divider()
 st.subheader("🔎 Filtros")
@@ -133,3 +95,40 @@ st.dataframe(
     use_container_width=True,
     height=520
 )
+
+# ---------------- VISÃO GERAL ----------------
+def conta(txt):
+    return df["Classificação"].str.contains(txt, na=False).sum()
+
+# ===== 🚨 EM RISCO (FOCO ABSOLUTO) =====
+st.markdown("### 🚨 Ação imediata (Em risco)")
+
+r1, r2, r3, r4 = st.columns(4)
+r1.metric("🚨 Campeão", conta("🚨 Campeão"))
+r2.metric("🚨 Leal", conta("🚨 Leal"))
+r3.metric("🚨 Promissor", conta("🚨 Promissor"))
+r4.metric("🚨 Novo", conta("🚨 Novo"))
+
+st.divider()
+
+# ===== 🟢 ATIVOS (CONTEXTO) =====
+st.markdown("### 🟢 Base ativa")
+
+a1, a2, a3, a4 = st.columns(4)
+a1.metric("Campeão", (df["Classificação"] == "Campeão").sum())
+a2.metric("Leal", (df["Classificação"] == "Leal").sum())
+a3.metric("Promissor", (df["Classificação"] == "Promissor").sum())
+a4.metric("Novo", (df["Classificação"] == "Novo").sum())
+
+st.divider()
+
+# ===== 💤 DORMENTES + ⛔ =====
+st.markdown("### 💤 Backlog / Reativação")
+
+d1, d2, d3, d4, d5 = st.columns(5)
+d1.metric("💤 Campeão", conta("💤 Campeão"))
+d2.metric("💤 Leal", conta("💤 Leal"))
+d3.metric("💤 Promissor", conta("💤 Promissor"))
+d4.metric("💤 Novo", conta("💤 Novo"))
+d5.metric("⛔ Não comprou", conta("Não comprou"))
+

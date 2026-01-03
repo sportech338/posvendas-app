@@ -22,54 +22,80 @@ df.columns = df.columns.str.strip()
 # Garante string
 df["Classificação"] = df["Classificação"].astype(str)
 
-# ---------------- PRIORIDADE (ROBUSTA) ----------------
+# ---------------- PRIORIDADE (ROBUSTA E ESCALÁVEL) ----------------
 def calcular_prioridade(classificacao: str) -> int:
-    if "🚨" in classificacao and "Campeão" in classificacao:
+    c = classificacao.lower()
+
+    # 🚨 EM RISCO — prioridade máxima
+    if "🚨" in classificacao and "campeão" in c:
         return 1
-    if "🚨" in classificacao and "Leal" in classificacao:
+    if "🚨" in classificacao and "leal" in c:
         return 2
-    if "Campeão" in classificacao:
+    if "🚨" in classificacao and "promissor" in c:
         return 3
-    if "Leal" in classificacao:
+    if "🚨" in classificacao and "novo" in c:
         return 4
-    if "Promissor" in classificacao:
+
+    # 🏆 NORMAIS
+    if "campeão" in c and "💤" not in classificacao:
         return 5
-    if "Novo" in classificacao:
+    if "leal" in c and "💤" not in classificacao:
         return 6
-    if "Dormente" in classificacao:
+    if "promissor" in c and "💤" not in classificacao:
         return 7
-    if "Não comprou ainda" in classificacao:
+    if "novo" in c and "💤" not in classificacao:
         return 8
-    return 99
+
+    # 💤 DORMENTES (MENOR PRIORIDADE)
+    if "💤" in classificacao and "campeão" in c:
+        return 9
+    if "💤" in classificacao and "leal" in c:
+        return 10
+    if "💤" in classificacao and "promissor" in c:
+        return 11
+    if "💤" in classificacao and "novo" in c:
+        return 12
+
+    # ⛔ NÃO COMPROU
+    if "não comprou" in c:
+        return 99
+
+    return 100
+
 
 df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
 # ---------------- KPIs ----------------
 st.subheader("📊 Visão Geral")
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3, c4, c5 = st.columns(5)
 
 c1.metric("Total clientes", len(df))
 
 c2.metric(
     "🚨 Campeões",
-    (
-        df["Classificação"].str.contains("🚨", na=False) &
-        df["Classificação"].str.contains("Campeão", na=False)
-    ).sum()
+    df["Classificação"].str.contains("🚨") &
+    df["Classificação"].str.contains("Campeão")
 )
 
 c3.metric(
     "🚨 Leais",
-    (
-        df["Classificação"].str.contains("🚨", na=False) &
-        df["Classificação"].str.contains("Leal", na=False)
-    ).sum()
+    df["Classificação"].str.contains("🚨") &
+    df["Classificação"].str.contains("Leal")
 )
 
 c4.metric(
-    "Dormentes",
-    df["Classificação"].str.contains("Dormente", na=False).sum()
+    "💤 Dormentes",
+    df["Classificação"].str.contains("💤").sum()
+)
+
+c5.metric(
+    "Campeões ativos",
+    (
+        df["Classificação"].str.contains("Campeão") &
+        ~df["Classificação"].str.contains("🚨") &
+        ~df["Classificação"].str.contains("💤")
+    ).sum()
 )
 
 # ---------------- FILTROS ----------------
@@ -81,8 +107,8 @@ col1, col2 = st.columns(2)
 with col1:
     filtro_class = st.multiselect(
         "Classificação",
-        options=sorted(df["Classificação"].dropna().unique()),
-        default=sorted(df["Classificação"].dropna().unique())
+        options=sorted(df["Classificação"].unique()),
+        default=sorted(df["Classificação"].unique())
     )
 
 with col2:
@@ -121,3 +147,4 @@ st.dataframe(
     use_container_width=True,
     height=520
 )
+

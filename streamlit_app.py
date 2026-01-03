@@ -19,99 +19,70 @@ PLANILHA = "Clientes Shopify"
 df = carregar_aba(PLANILHA, "Clientes Shopify")
 df.columns = df.columns.str.strip()
 
-# Garante string
 df["Classificação"] = df["Classificação"].astype(str)
 
-# ---------------- PRIORIDADE (ROBUSTA E ESCALÁVEL) ----------------
+# ---------------- PRIORIDADE ----------------
 def calcular_prioridade(classificacao: str) -> int:
     c = classificacao.lower()
 
-    # 🚨 EM RISCO
-    if "🚨" in classificacao and "campeão" in c:
-        return 1
-    if "🚨" in classificacao and "leal" in c:
-        return 2
-    if "🚨" in classificacao and "promissor" in c:
-        return 3
-    if "🚨" in classificacao and "novo" in c:
-        return 4
+    if "🚨" in classificacao and "campeão" in c: return 1
+    if "🚨" in classificacao and "leal" in c: return 2
+    if "🚨" in classificacao and "promissor" in c: return 3
+    if "🚨" in classificacao and "novo" in c: return 4
 
-    # 🟢 ATIVOS
-    if classificacao == "Campeão":
-        return 5
-    if classificacao == "Leal":
-        return 6
-    if classificacao == "Promissor":
-        return 7
-    if classificacao == "Novo":
-        return 8
+    if classificacao == "Campeão": return 5
+    if classificacao == "Leal": return 6
+    if classificacao == "Promissor": return 7
+    if classificacao == "Novo": return 8
 
-    # 💤 DORMENTES
-    if "💤" in classificacao and "campeão" in c:
-        return 9
-    if "💤" in classificacao and "leal" in c:
-        return 10
-    if "💤" in classificacao and "promissor" in c:
-        return 11
-    if "💤" in classificacao and "novo" in c:
-        return 12
+    if "💤" in classificacao and "campeão" in c: return 9
+    if "💤" in classificacao and "leal" in c: return 10
+    if "💤" in classificacao and "promissor" in c: return 11
+    if "💤" in classificacao and "novo" in c: return 12
 
-    # ⛔ NÃO COMPROU
-    if "não comprou" in c:
-        return 99
-
+    if "não comprou" in c: return 99
     return 100
 
 
 df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
-# ---------------- VISÃO GERAL (TODOS OS CARDS) ----------------
-st.subheader("📊 Visão Geral — Classificação de Clientes")
+# ---------------- VISÃO GERAL ----------------
+st.subheader("📊 Visão Geral — Prioridades do Pós-vendas")
 
-def contar(texto):
-    return df["Classificação"].str.fullmatch(texto, na=False).sum()
+def conta(txt):
+    return df["Classificação"].str.contains(txt, na=False).sum()
 
-def contem(texto):
-    return df["Classificação"].str.contains(texto, na=False).sum()
-
-# ===== 🚨 EM RISCO =====
-st.markdown("### 🚨 Em risco")
+# ===== 🚨 EM RISCO (FOCO ABSOLUTO) =====
+st.markdown("### 🚨 Ação imediata (Em risco)")
 
 r1, r2, r3, r4 = st.columns(4)
-r1.metric("🚨 Campeão", contem("🚨 Campeão"))
-r2.metric("🚨 Leal", contem("🚨 Leal"))
-r3.metric("🚨 Promissor", contem("🚨 Promissor"))
-r4.metric("🚨 Novo", contem("🚨 Novo"))
+r1.metric("🚨 Campeão", conta("🚨 Campeão"))
+r2.metric("🚨 Leal", conta("🚨 Leal"))
+r3.metric("🚨 Promissor", conta("🚨 Promissor"))
+r4.metric("🚨 Novo", conta("🚨 Novo"))
 
 st.divider()
 
-# ===== 🟢 ATIVOS =====
-st.markdown("### 🟢 Ativos")
+# ===== 🟢 ATIVOS (CONTEXTO) =====
+st.markdown("### 🟢 Base ativa")
 
 a1, a2, a3, a4 = st.columns(4)
-a1.metric("Campeão", contar("Campeão"))
-a2.metric("Leal", contar("Leal"))
-a3.metric("Promissor", contar("Promissor"))
-a4.metric("Novo", contar("Novo"))
+a1.metric("Campeão", (df["Classificação"] == "Campeão").sum())
+a2.metric("Leal", (df["Classificação"] == "Leal").sum())
+a3.metric("Promissor", (df["Classificação"] == "Promissor").sum())
+a4.metric("Novo", (df["Classificação"] == "Novo").sum())
 
 st.divider()
 
-# ===== 💤 DORMENTES =====
-st.markdown("### 💤 Dormentes")
+# ===== 💤 DORMENTES + ⛔ =====
+st.markdown("### 💤 Backlog / Reativação")
 
-d1, d2, d3, d4 = st.columns(4)
-d1.metric("💤 Campeão", contem("💤 Campeão"))
-d2.metric("💤 Leal", contem("💤 Leal"))
-d3.metric("💤 Promissor", contem("💤 Promissor"))
-d4.metric("💤 Novo", contem("💤 Novo"))
-
-st.divider()
-
-# ===== ⛔ NÃO COMPROU =====
-st.markdown("### ⛔ Fora do Pós-vendas")
-
-f1, _ = st.columns(2)
-f1.metric("⛔ Não comprou ainda", contem("Não comprou"))
+d1, d2, d3, d4, d5 = st.columns(5)
+d1.metric("💤 Campeão", conta("💤 Campeão"))
+d2.metric("💤 Leal", conta("💤 Leal"))
+d3.metric("💤 Promissor", conta("💤 Promissor"))
+d4.metric("💤 Novo", conta("💤 Novo"))
+d5.metric("⛔ Não comprou", conta("Não comprou"))
 
 # ---------------- FILTROS ----------------
 st.divider()
@@ -138,7 +109,7 @@ if busca:
         df_view["Email"].str.lower().str.contains(busca, na=False)
     ]
 
-# ---------------- TABELA PRINCIPAL ----------------
+# ---------------- TABELA ----------------
 st.divider()
 st.subheader("📋 Fila de Prioridade do Pós-vendas")
 

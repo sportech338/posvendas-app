@@ -44,7 +44,7 @@ def calcular_prioridade(classificacao: str) -> int:
 df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
 # ======================================================
-# 🚨 AÇÃO IMEDIATA — EM RISCO
+# 🚨 EM RISCO / AÇÃO IMEDIATA
 # ======================================================
 st.subheader("🚨 Em Risco / Ação imediata")
 
@@ -61,7 +61,10 @@ df_risco = df_risco[
     df_risco["Classificação"].str.contains("|".join(filtro_risco), na=False)
 ]
 
-df_risco = df_risco.sort_values(["Prioridade", "Valor Total Gasto"], ascending=[True, False])
+df_risco = df_risco.sort_values(
+    ["Prioridade", "Valor Total Gasto"],
+    ascending=[True, False]
+)
 
 st.dataframe(
     df_risco[
@@ -69,9 +72,10 @@ st.dataframe(
             "Classificação",
             "Cliente",
             "Email",
+            "Primeira Compra",
+            "Última Compra",
             "Qtd Pedidos",
             "Valor Total Gasto",
-            "Última Compra",
         ]
     ],
     use_container_width=True,
@@ -100,7 +104,10 @@ filtro_ativo = st.multiselect(
 
 df_ativo = df_ativo[df_ativo["Classificação"].isin(filtro_ativo)]
 
-df_ativo = df_ativo.sort_values(["Prioridade", "Valor Total Gasto"], ascending=[True, False])
+df_ativo = df_ativo.sort_values(
+    ["Prioridade", "Valor Total Gasto"],
+    ascending=[True, False]
+)
 
 st.dataframe(
     df_ativo[
@@ -108,9 +115,10 @@ st.dataframe(
             "Classificação",
             "Cliente",
             "Email",
+            "Primeira Compra",
+            "Última Compra",
             "Qtd Pedidos",
             "Valor Total Gasto",
-            "Última Compra",
         ]
     ],
     use_container_width=True,
@@ -120,7 +128,7 @@ st.dataframe(
 st.divider()
 
 # ======================================================
-# 💤 BACKLOG / REATIVAÇÃO
+# 💤 DORMENTES / REATIVAÇÃO
 # ======================================================
 st.subheader("💤 Dormentes / Reativação")
 
@@ -137,7 +145,10 @@ df_dorm = df_dorm[
     df_dorm["Classificação"].str.contains("|".join(filtro_dorm), na=False)
 ]
 
-df_dorm = df_dorm.sort_values(["Prioridade", "Valor Total Gasto"], ascending=[True, False])
+df_dorm = df_dorm.sort_values(
+    ["Prioridade", "Valor Total Gasto"],
+    ascending=[True, False]
+)
 
 st.dataframe(
     df_dorm[
@@ -145,9 +156,10 @@ st.dataframe(
             "Classificação",
             "Cliente",
             "Email",
+            "Primeira Compra",
+            "Última Compra",
             "Qtd Pedidos",
             "Valor Total Gasto",
-            "Última Compra",
         ]
     ],
     use_container_width=True,

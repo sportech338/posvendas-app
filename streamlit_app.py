@@ -9,16 +9,14 @@ st.set_page_config(
 )
 
 st.title("📦 Dashboard Pós-vendas — SporTech")
-st.caption("Leitura direta da classificação definida na planilha")
+st.caption("Painel operacional por filas de trabalho")
 st.divider()
 
 # ---------------- PLANILHA ----------------
 PLANILHA = "Clientes Shopify"
 
-# ---------------- LOAD ----------------
 df = carregar_aba(PLANILHA, "Clientes Shopify")
 df.columns = df.columns.str.strip()
-
 df["Classificação"] = df["Classificação"].astype(str)
 
 # ---------------- PRIORIDADE ----------------
@@ -43,47 +41,31 @@ def calcular_prioridade(classificacao: str) -> int:
     if "não comprou" in c: return 99
     return 100
 
-
 df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
-# ---------------- FILTROS ----------------
-st.divider()
-st.subheader("🔎 Filtros")
+# ======================================================
+# 🚨 AÇÃO IMEDIATA — EM RISCO
+# ======================================================
+st.subheader("🚨 Ação imediata (Em risco)")
 
-col1, col2 = st.columns(2)
+df_risco = df[df["Classificação"].str.contains("🚨", na=False)]
 
-with col1:
-    filtro_class = st.multiselect(
-        "Classificação",
-        options=sorted(df["Classificação"].unique()),
-        default=sorted(df["Classificação"].unique())
-    )
-
-with col2:
-    busca = st.text_input("Buscar cliente ou email")
-
-df_view = df[df["Classificação"].isin(filtro_class)]
-
-if busca:
-    busca = busca.lower()
-    df_view = df_view[
-        df_view["Cliente"].str.lower().str.contains(busca, na=False) |
-        df_view["Email"].str.lower().str.contains(busca, na=False)
-    ]
-
-# ---------------- TABELA ----------------
-st.divider()
-st.subheader("📋 Fila de Prioridade do Pós-vendas")
-
-df_view = df_view.sort_values(
-    by=["Prioridade", "Valor Total Gasto"],
-    ascending=[True, False]
+filtro_risco = st.multiselect(
+    "Filtrar em risco por nível",
+    options=["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"],
+    key="risco"
 )
 
+df_risco = df_risco[
+    df_risco["Classificação"].str.contains("|".join(filtro_risco), na=False)
+]
+
+df_risco = df_risco.sort_values(["Prioridade", "Valor Total Gasto"], ascending=[True, False])
+
 st.dataframe(
-    df_view[
+    df_risco[
         [
-            "Prioridade",
             "Classificação",
             "Cliente",
             "Email",
@@ -93,42 +75,92 @@ st.dataframe(
         ]
     ],
     use_container_width=True,
-    height=520
+    height=420
 )
 
-# ---------------- VISÃO GERAL ----------------
-def conta(txt):
-    return df["Classificação"].str.contains(txt, na=False).sum()
+st.divider()
 
-# ===== 🚨 EM RISCO (FOCO ABSOLUTO) =====
-st.markdown("### 🚨 Ação imediata (Em risco)")
+# ======================================================
+# 🟢 BASE ATIVA
+# ======================================================
+st.subheader("🟢 Base ativa")
 
-r1, r2, r3, r4 = st.columns(4)
-r1.metric("🚨 Campeão", conta("🚨 Campeão"))
-r2.metric("🚨 Leal", conta("🚨 Leal"))
-r3.metric("🚨 Promissor", conta("🚨 Promissor"))
-r4.metric("🚨 Novo", conta("🚨 Novo"))
+df_ativo = df[
+    (~df["Classificação"].str.contains("🚨", na=False)) &
+    (~df["Classificação"].str.contains("💤", na=False)) &
+    (~df["Classificação"].str.contains("não comprou", case=False, na=False))
+]
+
+filtro_ativo = st.multiselect(
+    "Filtrar base ativa por nível",
+    options=["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"],
+    key="ativo"
+)
+
+df_ativo = df_ativo[df_ativo["Classificação"].isin(filtro_ativo)]
+
+df_ativo = df_ativo.sort_values(["Prioridade", "Valor Total Gasto"], ascending=[True, False])
+
+st.dataframe(
+    df_ativo[
+        [
+            "Classificação",
+            "Cliente",
+            "Email",
+            "Qtd Pedidos",
+            "Valor Total Gasto",
+            "Última Compra",
+        ]
+    ],
+    use_container_width=True,
+    height=420
+)
 
 st.divider()
 
-# ===== 🟢 ATIVOS (CONTEXTO) =====
-st.markdown("### 🟢 Base ativa")
+# ======================================================
+# 💤 BACKLOG / REATIVAÇÃO
+# ======================================================
+st.subheader("💤 Backlog / Reativação")
 
-a1, a2, a3, a4 = st.columns(4)
-a1.metric("Campeão", (df["Classificação"] == "Campeão").sum())
-a2.metric("Leal", (df["Classificação"] == "Leal").sum())
-a3.metric("Promissor", (df["Classificação"] == "Promissor").sum())
-a4.metric("Novo", (df["Classificação"] == "Novo").sum())
+df_dorm = df[df["Classificação"].str.contains("💤", na=False)]
+
+filtro_dorm = st.multiselect(
+    "Filtrar dormentes por nível",
+    options=["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"],
+    key="dorm"
+)
+
+df_dorm = df_dorm[
+    df_dorm["Classificação"].str.contains("|".join(filtro_dorm), na=False)
+]
+
+df_dorm = df_dorm.sort_values(["Prioridade", "Valor Total Gasto"], ascending=[True, False])
+
+st.dataframe(
+    df_dorm[
+        [
+            "Classificação",
+            "Cliente",
+            "Email",
+            "Qtd Pedidos",
+            "Valor Total Gasto",
+            "Última Compra",
+        ]
+    ],
+    use_container_width=True,
+    height=420
+)
 
 st.divider()
 
-# ===== 💤 DORMENTES + ⛔ =====
-st.markdown("### 💤 Backlog / Reativação")
+# ======================================================
+# ⛔ FORA DO PÓS-VENDAS
+# ======================================================
+st.subheader("⛔ Fora do Pós-vendas")
 
-d1, d2, d3, d4, d5 = st.columns(5)
-d1.metric("💤 Campeão", conta("💤 Campeão"))
-d2.metric("💤 Leal", conta("💤 Leal"))
-d3.metric("💤 Promissor", conta("💤 Promissor"))
-d4.metric("💤 Novo", conta("💤 Novo"))
-d5.metric("⛔ Não comprou", conta("Não comprou"))
+df_out = df[df["Classificação"].str.contains("não comprou", case=False, na=False)]
 
+st.metric("⛔ Não comprou ainda", len(df_out))

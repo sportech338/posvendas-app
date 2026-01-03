@@ -26,7 +26,7 @@ df["Classificação"] = df["Classificação"].astype(str)
 def calcular_prioridade(classificacao: str) -> int:
     c = classificacao.lower()
 
-    # 🚨 EM RISCO — prioridade máxima
+    # 🚨 EM RISCO
     if "🚨" in classificacao and "campeão" in c:
         return 1
     if "🚨" in classificacao and "leal" in c:
@@ -36,17 +36,17 @@ def calcular_prioridade(classificacao: str) -> int:
     if "🚨" in classificacao and "novo" in c:
         return 4
 
-    # 🟢 ATIVOS (NORMAIS)
-    if "campeão" in c and "🚨" not in classificacao and "💤" not in classificacao:
+    # 🟢 ATIVOS
+    if classificacao == "Campeão":
         return 5
-    if "leal" in c and "🚨" not in classificacao and "💤" not in classificacao:
+    if classificacao == "Leal":
         return 6
-    if "promissor" in c and "🚨" not in classificacao and "💤" not in classificacao:
+    if classificacao == "Promissor":
         return 7
-    if "novo" in c and "🚨" not in classificacao and "💤" not in classificacao:
+    if classificacao == "Novo":
         return 8
 
-    # 💤 DORMENTES (MENOR PRIORIDADE)
+    # 💤 DORMENTES
     if "💤" in classificacao and "campeão" in c:
         return 9
     if "💤" in classificacao and "leal" in c:
@@ -65,55 +65,53 @@ def calcular_prioridade(classificacao: str) -> int:
 
 df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
-# ---------------- VISÃO GERAL (CORRETA) ----------------
-st.subheader("📊 Visão Geral")
+# ---------------- VISÃO GERAL (TODOS OS CARDS) ----------------
+st.subheader("📊 Visão Geral — Classificação de Clientes")
 
-total_clientes = len(df)
+def contar(texto):
+    return df["Classificação"].str.fullmatch(texto, na=False).sum()
 
-em_risco = df["Classificação"].str.contains("🚨", na=False).sum()
-dormentes = df["Classificação"].str.contains("💤", na=False).sum()
+def contem(texto):
+    return df["Classificação"].str.contains(texto, na=False).sum()
 
-ativos = (
-    ~df["Classificação"].str.contains("🚨", na=False) &
-    ~df["Classificação"].str.contains("💤", na=False) &
-    ~df["Classificação"].str.contains("não comprou", case=False, na=False)
-).sum()
+# ===== 🚨 EM RISCO =====
+st.markdown("### 🚨 Em risco")
 
-c1, c2, c3, c4 = st.columns(4)
+r1, r2, r3, r4 = st.columns(4)
+r1.metric("🚨 Campeão", contem("🚨 Campeão"))
+r2.metric("🚨 Leal", contem("🚨 Leal"))
+r3.metric("🚨 Promissor", contem("🚨 Promissor"))
+r4.metric("🚨 Novo", contem("🚨 Novo"))
 
-c1.metric("👥 Total clientes", total_clientes)
-c2.metric("🚨 Em risco", em_risco)
-c3.metric("💤 Dormentes", dormentes)
-c4.metric("🟢 Ativos", ativos)
+st.divider()
 
-# ---- Detalhe opcional de risco (nível) ----
-st.caption("Detalhamento dos clientes em risco")
+# ===== 🟢 ATIVOS =====
+st.markdown("### 🟢 Ativos")
 
-r1, r2, r3 = st.columns(3)
+a1, a2, a3, a4 = st.columns(4)
+a1.metric("Campeão", contar("Campeão"))
+a2.metric("Leal", contar("Leal"))
+a3.metric("Promissor", contar("Promissor"))
+a4.metric("Novo", contar("Novo"))
 
-r1.metric(
-    "🚨 Campeões",
-    (
-        df["Classificação"].str.contains("🚨", na=False) &
-        df["Classificação"].str.contains("Campeão", na=False)
-    ).sum()
-)
+st.divider()
 
-r2.metric(
-    "🚨 Leais",
-    (
-        df["Classificação"].str.contains("🚨", na=False) &
-        df["Classificação"].str.contains("Leal", na=False)
-    ).sum()
-)
+# ===== 💤 DORMENTES =====
+st.markdown("### 💤 Dormentes")
 
-r3.metric(
-    "🚨 Promissores",
-    (
-        df["Classificação"].str.contains("🚨", na=False) &
-        df["Classificação"].str.contains("Promissor", na=False)
-    ).sum()
-)
+d1, d2, d3, d4 = st.columns(4)
+d1.metric("💤 Campeão", contem("💤 Campeão"))
+d2.metric("💤 Leal", contem("💤 Leal"))
+d3.metric("💤 Promissor", contem("💤 Promissor"))
+d4.metric("💤 Novo", contem("💤 Novo"))
+
+st.divider()
+
+# ===== ⛔ NÃO COMPROU =====
+st.markdown("### ⛔ Fora do Pós-vendas")
+
+f1, _ = st.columns(2)
+f1.metric("⛔ Não comprou ainda", contem("Não comprou"))
 
 # ---------------- FILTROS ----------------
 st.divider()

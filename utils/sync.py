@@ -7,7 +7,7 @@ from utils.sheets import (
     append_aba,
     ler_aba,
     ler_ids_existentes,
-    escrever_aba
+    escrever_aba  # 👈 IMPORTANTE
 )
 
 # ======================================================
@@ -17,40 +17,16 @@ def gerar_clientes(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     """
     Consolida a base de clientes a partir da aba 'Pedidos Shopify'
     """
-
     if df_pedidos.empty:
         return pd.DataFrame()
 
     df = df_pedidos.copy()
 
-    # ----------------------------
-    # Datas
-    # ----------------------------
     df["Data de criação"] = pd.to_datetime(
         df["Data de criação"],
         errors="coerce"
     )
 
-    # ----------------------------
-    # 🔴 CORREÇÃO DEFINITIVA DO VALOR TOTAL
-    # Converte texto (R$, ponto, vírgula) em número
-    # ----------------------------
-    df["Valor Total"] = (
-        df["Valor Total"]
-        .astype(str)
-        .str.replace("R$", "", regex=False)
-        .str.replace(".", "", regex=False)
-        .str.replace(",", ".", regex=False)
-    )
-
-    df["Valor Total"] = pd.to_numeric(
-        df["Valor Total"],
-        errors="coerce"
-    ).fillna(0)
-
-    # ----------------------------
-    # Agrupamento por cliente
-    # ----------------------------
     clientes = (
         df
         .dropna(subset=["Customer ID"])
@@ -138,7 +114,7 @@ def sincronizar_shopify_com_planilha(
     df_pedidos = ler_aba(nome_planilha, "Pedidos Shopify")
     df_clientes = gerar_clientes(df_pedidos)
 
-    # ⚠️ SOBRESCREVE A ABA (BASE DERIVADA)
+    # ⚠️ AQUI É SOBRESCREVER, NÃO APPEND
     escrever_aba(
         planilha=nome_planilha,
         aba="Clientes Shopify",

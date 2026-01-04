@@ -1,22 +1,26 @@
 # utils/sync.py
 
 import pandas as pd
-from utils.shopify import puxar_pedidos_pagos
-from utils.sheets import escrever_aba
+from utils.shopify import puxar_pedidos_pagos_em_lotes
+from utils.sheets import (
+    append_aba,
+    ler_aba,
+    ler_ids_existentes
+)
 
-
+# ======================================================
+# GERA CLIENTES A PARTIR DOS PEDIDOS
+# ======================================================
 def gerar_clientes(df_pedidos: pd.DataFrame) -> pd.DataFrame:
-    """
-    Gera a base de clientes a partir da aba Pedidos Shopify
-    """
     if df_pedidos.empty:
         return pd.DataFrame()
 
-    df_pedidos["Data de criação"] = pd.to_datetime(df_pedidos["Data de criação"])
+    df = df_pedidos.copy()
+    df["Data de criação"] = pd.to_datetime(df["Data de criação"])
 
     clientes = (
-        df_pedidos
-        .groupby("Customer ID")
+        df
+        .groupby("Customer ID", dropna=True)
         .agg(
             Cliente=("Cliente", "first"),
             Email=("Email", "first"),
@@ -31,60 +35,78 @@ def gerar_clientes(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     return clientes
 
 
+# ======================================================
+# SINCRONIZAÇÃO INCREMENTAL
+# ======================================================
 def sincronizar_shopify_com_planilha(
-    nome_planilha: str = "Clientes Shopify"
+    nome_planilha: str = "Clientes Shopify",
+    lote_tamanho: int = 500
 ) -> dict:
     """
-    Orquestrador principal:
-    Shopify -> Pedidos Shopify -> Clientes Shopify
+    Shopify → Pedidos Shopify (append incremental)
+            → Clientes Shopify (recalculado)
     """
 
     # =========================
-    # 1. PUXAR PEDIDOS DA SHOPIFY
+    # IDS JÁ EXISTENTES
     # =========================
-    pedidos = puxar_pedidos_pagos()
-
-    if not pedidos:
-        return {
-            "status": "warning",
-            "mensagem": "Nenhum pedido pago encontrado na Shopify."
-        }
-
-    df_pedidos = pd.DataFrame(pedidos)
-
-    # =========================
-    # 2. SALVAR PEDIDOS NA PLANILHA
-    # =========================
-    escrever_aba(
+    ids_existentes = ler_ids_existentes(
         planilha=nome_planilha,
         aba="Pedidos Shopify",
-        df=df_pedidos
+        coluna_id="Pedido ID"
     )
 
-    # =========================
-    # 3. GERAR CLIENTES
-    # =========================
-    df_clientes = gerar_clientes(df_pedidos)
+    total_novos = 0
 
-    if df_clientes.empty:
+    # =========================
+    # LOOP POR LOTES
+    # =========================
+    for lote in puxar_pedidos_pagos_em_lotes(lote_tamanho):
+
+        df_lote = pd.DataFrame(lote)
+        df_lote["Pedido ID"] = df_lote["Pedido ID"].astype(str)
+
+        # Remove pedidos já existentes
+        df_lote = df_lote[
+            ~df_lote["Pedido ID"].isin(ids_existentes)
+        ]
+
+        if df_lote.empty:
+            continue
+
+        append_aba(
+            planilha=nome_planilha,
+            aba="Pedidos Shopify",
+            df=df_lote
+        )
+
+        ids_existentes.update(df_lote["Pedido ID"].tolist())
+        total_novos += len(df_lote)
+
+    if total_novos == 0:
         return {
-            "status": "warning",
-            "mensagem": "Pedidos salvos, mas nenhum cliente foi gerado."
+            "status": "success",
+            "mensagem": "Nenhum pedido novo encontrado."
         }
 
     # =========================
-    # 4. SALVAR CLIENTES NA PLANILHA
+    # REGERAR CLIENTES
     # =========================
-    escrever_aba(
+    df_pedidos = ler_aba(nome_planilha, "Pedidos Shopify")
+    df_clientes = gerar_clientes(df_pedidos)
+
+    # ⚠️ Clientes pode sobrescrever (base derivada)
+    append_aba(
         planilha=nome_planilha,
         aba="Clientes Shopify",
         df=df_clientes
     )
 
-    # =========================
-    # 5. RETORNO PARA O STREAMLIT
-    # =========================
     return {
         "status": "success",
-        "mensagem": f"Sincronização concluída: {len(df_pedidos)} pedidos e {len(df_clientes)} clientes."
+        "mensagem": (
+            f"Sincronização concluída com sucesso.\n"
+            f"🆕 Pedidos novos: {total_novos}\n"
+            f"👥 Clientes atualizados: {len(df_clientes)}"
+        )
     }

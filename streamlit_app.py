@@ -106,8 +106,9 @@ df_risco = df[df["Classificação"].str.contains("🚨", na=False)]
 
 filtro_risco = st.multiselect(
     "Filtrar por nível",
-    ["Campeão", "Leal", "Promissor", "Novo"],
-    default=["Campeão", "Leal", "Promissor", "Novo"]
+    options=["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"],
+    key="filtro_risco"
 )
 
 if filtro_risco:
@@ -151,8 +152,9 @@ df_ativo = df[
 
 filtro_ativo = st.multiselect(
     "Filtrar por nível",
-    ["Campeão", "Leal", "Promissor", "Novo"],
-    default=["Campeão", "Leal", "Promissor", "Novo"]
+    options=["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"],
+    key="filtro_ativo"
 )
 
 if filtro_ativo:
@@ -190,8 +192,9 @@ df_dorm = df[df["Classificação"].str.contains("💤", na=False)]
 
 filtro_dorm = st.multiselect(
     "Filtrar por nível",
-    ["Campeão", "Leal", "Promissor", "Novo"],
-    default=["Campeão", "Leal", "Promissor", "Novo"]
+    options=["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"],
+    key="filtro_dorm"
 )
 
 if filtro_dorm:

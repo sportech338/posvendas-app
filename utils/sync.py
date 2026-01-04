@@ -5,74 +5,11 @@ import pandas as pd
 from utils.shopify import puxar_pedidos_pagos_em_lotes
 from utils.sheets import (
     append_aba,
-    ler_aba,
-    ler_ids_existentes,
-    escrever_aba
+    ler_ids_existentes
 )
 
 # ======================================================
-# GERA CLIENTES A PARTIR DOS PEDIDOS
-# ======================================================
-def gerar_clientes(df_pedidos: pd.DataFrame) -> pd.DataFrame:
-    """
-    Consolida a base de clientes a partir da aba 'Pedidos Shopify'
-    - NÃO perde pedidos guest
-    - Valores financeiros corretos
-    """
-    if df_pedidos.empty:
-        return pd.DataFrame()
-
-    df = df_pedidos.copy()
-
-    # -------------------------------
-    # Datas
-    # -------------------------------
-    df["Data de criação"] = pd.to_datetime(
-        df["Data de criação"],
-        errors="coerce"
-    )
-
-    # -------------------------------
-    # Normalização de valores (CRÍTICO)
-    # -------------------------------
-    df["Valor Total"] = (
-        df["Valor Total"]
-        .astype(str)
-        .str.replace("R$", "", regex=False)
-        .str.replace(".", "", regex=False)
-        .str.replace(",", ".", regex=False)
-        .astype(float)
-        .fillna(0)
-    )
-
-    # -------------------------------
-    # Chave única de cliente
-    # Customer ID se existir, senão Email
-    # -------------------------------
-    df["Cliente_Key"] = df["Customer ID"].astype(str).str.strip()
-    df.loc[df["Cliente_Key"] == "", "Cliente_Key"] = df["Email"]
-
-    # -------------------------------
-    # Agrupamento final
-    # -------------------------------
-    clientes = (
-        df
-        .groupby("Cliente_Key", as_index=False)
-        .agg(
-            Cliente=("Cliente", "first"),
-            Email=("Email", "first"),
-            Qtd_Pedidos=("Pedido ID", "count"),
-            Valor_Total_Gasto=("Valor Total", "sum"),
-            Primeira_Compra=("Data de criação", "min"),
-            Ultima_Compra=("Data de criação", "max"),
-        )
-    )
-
-    return clientes
-
-
-# ======================================================
-# SINCRONIZAÇÃO SHOPIFY → PLANILHA (INCREMENTAL)
+# SINCRONIZAÇÃO SHOPIFY → PLANILHA (SOMENTE PEDIDOS)
 # ======================================================
 def sincronizar_shopify_com_planilha(
     nome_planilha: str = "Clientes Shopify",
@@ -81,7 +18,8 @@ def sincronizar_shopify_com_planilha(
     """
     Fluxo:
     Shopify → Pedidos Shopify (append incremental)
-           → Clientes Shopify (recalculado / sobrescrito)
+
+    ⚠️ NÃO mexe em Clientes Shopify
     """
 
     # ==================================================
@@ -107,13 +45,13 @@ def sincronizar_shopify_com_planilha(
         if df_lote.empty:
             continue
 
+        # 🔒 Normalização de ID
         df_lote["Pedido ID"] = (
             df_lote["Pedido ID"]
             .astype(str)
             .str.replace(".0", "", regex=False)
             .str.strip()
         )
-
 
         # Remove pedidos já existentes
         df_lote = df_lote[
@@ -133,27 +71,13 @@ def sincronizar_shopify_com_planilha(
         total_novos += len(df_lote)
 
     # ==================================================
-    # 3. NENHUM PEDIDO NOVO
-    # ==================================================
-    if total_novos == 0:
-        return {
-            "status": "success",
-            "mensagem": (
-                "Nenhum pedido novo encontrado.\n"
-                f"📦 Pedidos processados: {total_processados}"
-            )
-        }
-
-
-    # ==================================================
-    # 5. RETORNO
+    # 3. RETORNO
     # ==================================================
     return {
         "status": "success",
         "mensagem": (
-            "✅ Sincronização concluída com sucesso\n"
+            "✅ Pedidos sincronizados com sucesso\n"
             f"📦 Pedidos processados: {total_processados}\n"
-            f"🆕 Pedidos novos: {total_novos}\n"
-            f"👥 Clientes atualizados: {len(df_clientes)}"
+            f"🆕 Pedidos novos: {total_novos}"
         )
     }

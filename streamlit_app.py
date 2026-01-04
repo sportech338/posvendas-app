@@ -102,17 +102,26 @@ st.divider()
 # 📄 CARREGAMENTO DA PLANILHA (CLIENTES)
 # ======================================================
 df = ler_aba(PLANILHA, "Clientes Shopify")
-df["Última Compra"] = pd.to_datetime(
-    df["Última Compra"],
-    errors="coerce"
-)
 
 if df.empty:
     st.info("ℹ️ Nenhum dado encontrado na planilha.")
     st.stop()
 
+# ✅ Limpa espaços nos nomes das colunas
 df.columns = df.columns.str.strip()
+
+# ✅ Garante que a coluna de data exista (aceita 3 variações)
+if "Última Compra" not in df.columns:
+    if "Ultima Compra" in df.columns:
+        df = df.rename(columns={"Ultima Compra": "Última Compra"})
+    elif "Ultima_Compra" in df.columns:
+        df = df.rename(columns={"Ultima_Compra": "Última Compra"})
+
+# ✅ Agora converte com segurança
+df["Última Compra"] = pd.to_datetime(df["Última Compra"], errors="coerce")
+
 df["Classificação"] = df["Classificação"].astype(str)
+
 
 df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
 df["Valor Total Gasto"] = (

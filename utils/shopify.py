@@ -4,12 +4,21 @@ import requests
 import streamlit as st
 
 
-def puxar_pedidos_pagos_em_lotes(lote_tamanho: int = 500):
+def puxar_pedidos_pagos_em_lotes(
+    lote_tamanho: int = 500,
+    data_inicio: str = "2023-01-01T00:00:00-03:00"
+):
     """
-    Generator que busca pedidos pagos da Shopify
-    e retorna os dados em lotes (ex: 500 em 500)
+    Busca TODOS os pedidos pagos da Shopify a partir de uma data (default: 01/01/2023)
+    e retorna os dados em lotes (ex: 500 em 500).
+
+    - Usa paginação oficial da Shopify (Link header)
+    - Para automaticamente quando não houver mais pedidos
     """
 
+    # =========================
+    # CONFIG SHOPIFY
+    # =========================
     shop = st.secrets["shopify"]["shop_name"]
     token = st.secrets["shopify"]["access_token"]
     version = st.secrets["shopify"]["API_VERSION"]
@@ -21,26 +30,36 @@ def puxar_pedidos_pagos_em_lotes(lote_tamanho: int = 500):
         "Content-Type": "application/json"
     }
 
+    # ⚠️ PARAMS SÓ NA PRIMEIRA CHAMADA
     params = {
         "financial_status": "paid",
         "status": "any",
-        "limit": 250  # limite máximo da Shopify por request
+        "limit": 250,  # máximo permitido pela Shopify
+        "created_at_min": data_inicio,
+        "order": "created_at asc"  # do mais antigo para o mais novo
     }
 
     buffer = []
     url = base_url
 
+    # =========================
+    # LOOP DE PAGINAÇÃO
+    # =========================
     while url:
         response = requests.get(url, headers=headers, params=params)
         response.raise_for_status()
 
         orders = response.json().get("orders", [])
 
+        # Se não vier pedido nenhum, encerra
+        if not orders:
+            break
+
         for o in orders:
             buffer.append({
-                "Pedido ID": o["id"],
+                "Pedido ID": str(o["id"]),
                 "Data de criação": o["created_at"],
-                "Customer ID": o["customer"]["id"] if o.get("customer") else "",
+                "Customer ID": str(o["customer"]["id"]) if o.get("customer") else "",
                 "Cliente": (
                     f"{o.get('customer', {}).get('first_name', '')} "
                     f"{o.get('customer', {}).get('last_name', '')}"
@@ -50,19 +69,24 @@ def puxar_pedidos_pagos_em_lotes(lote_tamanho: int = 500):
                 "Pedido": o.get("order_number")
             })
 
-            # 🔹 Quando atingir o tamanho do lote, entrega
+            # 🔹 Entrega lote completo
             if len(buffer) >= lote_tamanho:
                 yield buffer
                 buffer = []
 
-        # 🔁 Paginação Shopify
+        # =========================
+        # PAGINAÇÃO SHOPIFY
+        # =========================
         link = response.headers.get("Link")
+
         if link and 'rel="next"' in link:
             url = link.split(";")[0].strip("<>")
-            params = {}  # params só na primeira chamada
+            params = {}  # params só na primeira request
         else:
             url = None
 
-    # 🔚 Último lote (se sobrar algo)
+    # =========================
+    # ÚLTIMO LOTE (RESTO)
+    # =========================
     if buffer:
         yield buffer

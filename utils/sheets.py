@@ -33,6 +33,9 @@ def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
     return pd.DataFrame(ws.get_all_records())
 
 
+# ======================================================
+# NORMALIZAÇÕES
+# ======================================================
 def _normalizar_id(valor) -> str:
     if valor is None:
         return ""
@@ -42,6 +45,23 @@ def _normalizar_id(valor) -> str:
         .replace(",", "")
         .strip()
     )
+
+
+def _normalizar_valores_ptbr(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Converte valores monetários para padrão pt-BR
+    (96.9 -> 96,9) antes de enviar ao Google Sheets
+    """
+    df = df.copy()
+
+    if "Valor Total" in df.columns:
+        df["Valor Total"] = (
+            df["Valor Total"]
+            .astype(str)
+            .str.replace(".", ",", regex=False)
+        )
+
+    return df
 
 
 def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
@@ -87,6 +107,9 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
 
     if not existente:
         ws.append_row(df.columns.tolist())
+
+    # ✅ NORMALIZA VALORES PT-BR AQUI
+    df = _normalizar_valores_ptbr(df)
 
     linhas = df.astype(str).values.tolist()
     ws.append_rows(linhas, value_input_option="USER_ENTERED")

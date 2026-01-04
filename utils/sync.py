@@ -31,8 +31,8 @@ def sincronizar_shopify_com_planilha(
         coluna_id="Pedido ID"
     )
 
-    total_novos = 0
-    total_processados = 0
+    total_processados = 0  # tudo que veio da Shopify
+    total_novos = 0        # só o que entrou na planilha
 
     # ==================================================
     # 2. BUSCA SHOPIFY POR LOTES
@@ -40,12 +40,41 @@ def sincronizar_shopify_com_planilha(
     for lote in puxar_pedidos_pagos_em_lotes(lote_tamanho):
 
         df_lote = pd.DataFrame(lote)
+
+        # Conta TODOS os pedidos retornados pela Shopify
         total_processados += len(df_lote)
 
         if df_lote.empty:
             continue
 
-        # 🔒 Normalização de ID
+        # ==================================================
+        # 🔒 BLINDAGEM DE COLUNAS (EVITA KEYERROR)
+        # ==================================================
+        for col in ["Cancelled At", "Total Refunded", "Valor Total"]:
+            if col not in df_lote.columns:
+                if col == "Total Refunded":
+                    df_lote[col] = 0
+                else:
+                    df_lote[col] = None
+
+        # ==================================================
+        # ❌ REMOVE CANCELADOS
+        # ==================================================
+        df_lote = df_lote[df_lote["Cancelled At"].isna()]
+
+        # ==================================================
+        # ❌ REMOVE TOTALMENTE REEMBOLSADOS
+        # ==================================================
+        df_lote = df_lote[
+            df_lote["Total Refunded"] < df_lote["Valor Total"]
+        ]
+
+        if df_lote.empty:
+            continue
+
+        # ==================================================
+        # 🔒 NORMALIZAÇÃO DE ID
+        # ==================================================
         df_lote["Pedido ID"] = (
             df_lote["Pedido ID"]
             .astype(str)
@@ -53,7 +82,9 @@ def sincronizar_shopify_com_planilha(
             .str.strip()
         )
 
-        # Remove pedidos já existentes
+        # ==================================================
+        # ❌ REMOVE DUPLICADOS JÁ NA PLANILHA
+        # ==================================================
         df_lote = df_lote[
             ~df_lote["Pedido ID"].isin(ids_existentes)
         ]
@@ -61,6 +92,9 @@ def sincronizar_shopify_com_planilha(
         if df_lote.empty:
             continue
 
+        # ==================================================
+        # ✅ APPEND NA ABA "Pedidos Shopify"
+        # ==================================================
         append_aba(
             planilha=nome_planilha,
             aba="Pedidos Shopify",
@@ -71,13 +105,13 @@ def sincronizar_shopify_com_planilha(
         total_novos += len(df_lote)
 
     # ==================================================
-    # 3. RETORNO
+    # 3. RETORNO FINAL
     # ==================================================
     return {
         "status": "success",
         "mensagem": (
             "✅ Pedidos sincronizados com sucesso\n"
-            f"📦 Pedidos processados: {total_processados}\n"
-            f"🆕 Pedidos novos: {total_novos}"
+            f"📦 Pedidos processados (Shopify): {total_processados}\n"
+            f"🆕 Pedidos novos adicionados: {total_novos}"
         )
     }

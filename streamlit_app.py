@@ -19,6 +19,7 @@ st.caption("Shopify → Google Sheets → Painel de Clientes")
 st.divider()
 
 PLANILHA = "Clientes Shopify"
+ABA_CLIENTES = "Clientes Shopify"
 
 # ======================================================
 # 🔄 SINCRONIZAÇÃO SHOPIFY
@@ -38,12 +39,8 @@ if st.button("🔄 Atualizar pedidos pagos"):
 st.divider()
 
 # ======================================================
-# 📊 PAINEL DE CLIENTES
+# 📊 CARREGAMENTO DOS CLIENTES
 # ======================================================
-st.subheader("📊 Painel de Clientes")
-
-ABA_CLIENTES = "Clientes Shopify"
-
 @st.cache_data(ttl=300)
 def carregar_clientes():
     return ler_aba(PLANILHA, ABA_CLIENTES)
@@ -59,11 +56,9 @@ if df.empty:
 # ======================================================
 df.columns = df.columns.str.strip()
 
-# Datas
 df["Primeiro Pedido"] = pd.to_datetime(df["Primeiro Pedido"], errors="coerce")
 df["Último Pedido"] = pd.to_datetime(df["Último Pedido"], errors="coerce")
 
-# Numéricos
 df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
 
 df["Valor Total"] = (
@@ -75,11 +70,7 @@ df["Valor Total"] = (
     .str.replace(",", ".", regex=False)
 )
 
-df["Valor Total"] = pd.to_numeric(
-    df["Valor Total"],
-    errors="coerce"
-).fillna(0)
-
+df["Valor Total"] = pd.to_numeric(df["Valor Total"], errors="coerce").fillna(0)
 
 df["Dias sem comprar"] = pd.to_numeric(
     df["Dias sem comprar"], errors="coerce"
@@ -88,154 +79,106 @@ df["Dias sem comprar"] = pd.to_numeric(
 df["Classificação"] = df["Classificação"].astype(str)
 
 # ======================================================
-# MÉTRICAS
+# 📈 MÉTRICAS TOPO
 # ======================================================
 c1, c2, c3, c4 = st.columns(4)
 
 c1.metric("👥 Total de clientes", len(df))
-faturamento = df["Valor Total"].sum()
 
+faturamento = df["Valor Total"].sum()
 c2.metric(
     "💰 Faturamento total",
     f"R$ {faturamento:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 )
 
-c3.metric("🏆 Campeões", len(df[df["Classificação"] == "Campeão"]))
+c3.metric("🏆 Campeões", len(df[df["Classificação"].str.contains("Campeão", na=False)]))
 c4.metric("🚨 Em risco", len(df[df["Classificação"].str.contains("🚨", na=False)]))
 
 st.divider()
 
 # ======================================================
-# FILTROS
+# 📋 TABELAS
 # ======================================================
-st.subheader("🔎 Filtros")
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    filtro_class = st.multiselect(
-        "Classificação",
-        options=sorted(df["Classificação"].unique()),
-        default=sorted(df["Classificação"].unique())
-    )
-
-with col2:
-    min_dias = int(df["Dias sem comprar"].min())
-    max_dias = int(df["Dias sem comprar"].max())
-
-    filtro_dias = st.slider(
-        "Dias sem comprar",
-        min_value=min_dias,
-        max_value=max_dias,
-        value=(min_dias, max_dias)
-    )
-
-with col3:
-    ordem = st.selectbox(
-        "Ordenar por",
-        [
-            "Último Pedido (mais recente)",
-            "Último Pedido (mais antigo)",
-            "Maior Valor Total",
-            "Maior Qtd Pedidos"
-        ]
-    )
-
-# ======================================================
-# APLICA FILTROS
-# ======================================================
-df_filtrado = df[
-    (df["Classificação"].isin(filtro_class)) &
-    (df["Dias sem comprar"].between(filtro_dias[0], filtro_dias[1]))
-]
-
-# Ordenação
-if ordem == "Último Pedido (mais recente)":
-    df_filtrado = df_filtrado.sort_values("Último Pedido", ascending=False)
-elif ordem == "Último Pedido (mais antigo)":
-    df_filtrado = df_filtrado.sort_values("Último Pedido", ascending=True)
-elif ordem == "Maior Valor Total":
-    df_filtrado = df_filtrado.sort_values("Valor Total", ascending=False)
-elif ordem == "Maior Qtd Pedidos":
-    df_filtrado = df_filtrado.sort_values("Qtd Pedidos", ascending=False)
-
-st.divider()
-
-# ======================================================
-# 📋 TABELAS POR STATUS
-# ======================================================
-
-COLUNAS_TABELA = [
+COLUNAS = [
     "Cliente",
     "Email",
     "Classificação",
     "Qtd Pedidos",
     "Valor Total",
-    "Primeiro Pedido",
     "Último Pedido",
     "Dias sem comprar"
 ]
 
-# -------------------------------
+NIVEIS = ["Campeão", "Leal", "Promissor", "Novo"]
+
+# ======================================================
 # 🚨 EM RISCO
-# -------------------------------
+# ======================================================
 st.subheader("🚨 Em risco — ação imediata")
 
-df_risco = df_filtrado[
-    df_filtrado["Classificação"].str.contains("🚨", na=False)
+filtro_risco = st.multiselect(
+    "Filtrar Em risco por nível",
+    NIVEIS,
+    default=NIVEIS,
+    key="risco"
+)
+
+df_risco = df[
+    df["Classificação"].str.contains("🚨", na=False) &
+    df["Classificação"].str.contains("|".join(filtro_risco), na=False)
 ].sort_values(
     ["Dias sem comprar", "Valor Total"],
     ascending=[False, False]
 )
 
-st.dataframe(
-    df_risco[COLUNAS_TABELA],
-    use_container_width=True,
-    height=420
-)
-
+st.dataframe(df_risco[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_risco)} clientes em risco")
 st.divider()
 
-# -------------------------------
+# ======================================================
 # 🟢 BASE ATIVA
-# -------------------------------
+# ======================================================
 st.subheader("🟢 Base ativa")
 
-df_ativa = df_filtrado[
-    (~df_filtrado["Classificação"].str.contains("🚨", na=False)) &
-    (~df_filtrado["Classificação"].str.contains("💤", na=False)) &
-    (~df_filtrado["Classificação"].str.contains("não comprou", case=False, na=False))
+filtro_ativa = st.multiselect(
+    "Filtrar Base ativa por nível",
+    NIVEIS,
+    default=NIVEIS,
+    key="ativa"
+)
+
+df_ativa = df[
+    (~df["Classificação"].str.contains("🚨", na=False)) &
+    (~df["Classificação"].str.contains("💤", na=False)) &
+    (df["Classificação"].str.contains("|".join(filtro_ativa), na=False))
 ].sort_values(
     ["Valor Total", "Último Pedido"],
     ascending=[False, False]
 )
 
-st.dataframe(
-    df_ativa[COLUNAS_TABELA],
-    use_container_width=True,
-    height=420
-)
-
+st.dataframe(df_ativa[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_ativa)} clientes ativos")
 st.divider()
 
-# -------------------------------
+# ======================================================
 # 💤 DORMENTES
-# -------------------------------
+# ======================================================
 st.subheader("💤 Dormentes — reativação")
 
-df_dormentes = df_filtrado[
-    df_filtrado["Classificação"].str.contains("💤", na=False)
+filtro_dorm = st.multiselect(
+    "Filtrar Dormentes por nível",
+    NIVEIS,
+    default=NIVEIS,
+    key="dormentes"
+)
+
+df_dormentes = df[
+    df["Classificação"].str.contains("💤", na=False) &
+    df["Classificação"].str.contains("|".join(filtro_dorm), na=False)
 ].sort_values(
     ["Dias sem comprar"],
     ascending=False
 )
 
-st.dataframe(
-    df_dormentes[COLUNAS_TABELA],
-    use_container_width=True,
-    height=420
-)
-
+st.dataframe(df_dormentes[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_dormentes)} clientes dormentes")

@@ -20,9 +20,8 @@ PLANILHA = "Clientes Shopify"
 # ======================================================
 # 🔄 SINCRONIZAÇÃO SHOPIFY → PEDIDOS SHOPIFY
 # ======================================================
-st.subheader("🔄 Sincronizar pedidos pagos")
 
-if st.button("🔄 Atualizar dados da Shopify"):
+if st.button("🔄 Atualizar pedidos pagos"):
     with st.spinner("Buscando pedidos pagos na Shopify..."):
         resultado = sincronizar_shopify_com_planilha(
             nome_planilha=PLANILHA,

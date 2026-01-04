@@ -9,7 +9,7 @@ from utils.sheets import (
 )
 
 # ======================================================
-# SINCRONIZAÇÃO SHOPIFY → PLANILHA (SOMENTE PEDIDOS)
+# SINCRONIZAÇÃO SHOPIFY → PLANILHA
 # ======================================================
 def sincronizar_shopify_com_planilha(
     nome_planilha: str = "Clientes Shopify",
@@ -17,101 +17,127 @@ def sincronizar_shopify_com_planilha(
 ) -> dict:
     """
     Fluxo:
-    Shopify → Pedidos Shopify (append incremental)
+    Shopify →
+      → Pedidos Shopify (válidos)
+      → Pedidos Ignorados (cancelados / reembolsados)
 
     ⚠️ NÃO mexe em Clientes Shopify
     """
 
     # ==================================================
-    # 1. IDS JÁ EXISTENTES (ANTI-DUPLICAÇÃO)
+    # IDS JÁ EXISTENTES
     # ==================================================
-    ids_existentes = ler_ids_existentes(
+    ids_pedidos = ler_ids_existentes(
         planilha=nome_planilha,
         aba="Pedidos Shopify",
         coluna_id="Pedido ID"
     )
 
-    total_processados = 0  # tudo que veio da Shopify
-    total_novos = 0        # só o que entrou na planilha
+    ids_ignorados = ler_ids_existentes(
+        planilha=nome_planilha,
+        aba="Pedidos Ignorados",
+        coluna_id="Pedido ID"
+    )
+
+    total_processados = 0
+    total_novos = 0
+    total_ignorados = 0
 
     # ==================================================
-    # 2. BUSCA SHOPIFY POR LOTES
+    # BUSCA SHOPIFY
     # ==================================================
     for lote in puxar_pedidos_pagos_em_lotes(lote_tamanho):
 
-        df_lote = pd.DataFrame(lote)
+        df = pd.DataFrame(lote)
+        total_processados += len(df)
 
-        # Conta TODOS os pedidos retornados pela Shopify
-        total_processados += len(df_lote)
-
-        if df_lote.empty:
+        if df.empty:
             continue
 
-        # ==================================================
-        # 🔒 BLINDAGEM DE COLUNAS (EVITA KEYERROR)
-        # ==================================================
-        for col in ["Cancelled At", "Total Refunded", "Valor Total"]:
-            if col not in df_lote.columns:
-                if col == "Total Refunded":
-                    df_lote[col] = 0
-                else:
-                    df_lote[col] = None
-
-        # ==================================================
-        # ❌ REMOVE CANCELADOS
-        # ==================================================
-        df_lote = df_lote[df_lote["Cancelled At"].isna()]
-
-        # ==================================================
-        # ❌ REMOVE TOTALMENTE REEMBOLSADOS
-        # ==================================================
-        df_lote = df_lote[
-            df_lote["Total Refunded"] < df_lote["Valor Total"]
-        ]
-
-        if df_lote.empty:
-            continue
-
-        # ==================================================
-        # 🔒 NORMALIZAÇÃO DE ID
-        # ==================================================
-        df_lote["Pedido ID"] = (
-            df_lote["Pedido ID"]
+        # 🔒 Normalização de ID
+        df["Pedido ID"] = (
+            df["Pedido ID"]
             .astype(str)
             .str.replace(".0", "", regex=False)
             .str.strip()
         )
 
         # ==================================================
-        # ❌ REMOVE DUPLICADOS JÁ NA PLANILHA
+        # IDENTIFICA CANCELADOS / REEMBOLSADOS
         # ==================================================
-        df_lote = df_lote[
-            ~df_lote["Pedido ID"].isin(ids_existentes)
+        df_cancelados = df[
+            (df["Cancelled At"].notna()) |
+            (df["Total Refunded"] >= df["Valor Total"])
+        ].copy()
+
+        if not df_cancelados.empty:
+            df_cancelados["Motivo"] = df_cancelados.apply(
+                lambda r: "CANCELADO"
+                if pd.notna(r["Cancelled At"])
+                else "REEMBOLSADO",
+                axis=1
+            )
+
+            df_cancelados_final = df_cancelados[
+                ["Pedido ID", "Data de criação", "Financial Status", "Cancelled At", "Motivo"]
+            ].rename(columns={
+                "Financial Status": "Status",
+                "Cancelled At": "Data de cancelamento"
+            })
+
+            df_cancelados_final = df_cancelados_final[
+                ~df_cancelados_final["Pedido ID"].isin(ids_ignorados)
+            ]
+
+            if not df_cancelados_final.empty:
+                append_aba(
+                    planilha=nome_planilha,
+                    aba="Pedidos Ignorados",
+                    df=df_cancelados_final
+                )
+
+                ids_ignorados.update(df_cancelados_final["Pedido ID"].tolist())
+                total_ignorados += len(df_cancelados_final)
+
+        # ==================================================
+        # PEDIDOS VÁLIDOS (NÃO CANCELADOS)
+        # ==================================================
+        df_validos = df[
+            (df["Cancelled At"].isna()) &
+            (df["Total Refunded"] < df["Valor Total"])
         ]
 
-        if df_lote.empty:
+        df_validos = df_validos[
+            ~df_validos["Pedido ID"].isin(ids_pedidos)
+        ]
+
+        if df_validos.empty:
             continue
 
-        # ==================================================
-        # ✅ APPEND NA ABA "Pedidos Shopify"
-        # ==================================================
+        # ❌ REMOVE COLUNAS INTERNAS
+        df_validos_final = df_validos.drop(
+            columns=["Cancelled At", "Total Refunded", "Financial Status"],
+            errors="ignore"
+        )
+
         append_aba(
             planilha=nome_planilha,
             aba="Pedidos Shopify",
-            df=df_lote
+            df=df_validos_final
         )
 
-        ids_existentes.update(df_lote["Pedido ID"].tolist())
-        total_novos += len(df_lote)
+        ids_pedidos.update(df_validos_final["Pedido ID"].tolist())
+        total_novos += len(df_validos_final)
 
     # ==================================================
-    # 3. RETORNO FINAL
+    # RETORNO
     # ==================================================
     return {
         "status": "success",
         "mensagem": (
-            "✅ Pedidos sincronizados com sucesso\n"
-            f"📦 Pedidos processados (Shopify): {total_processados}\n"
-            f"🆕 Pedidos novos adicionados: {total_novos}"
+            "✅ Sincronização concluída\n\n"
+            f"📦 Pedidos processados: {total_processados}\n"
+            f"🆕 Pedidos válidos adicionados: {total_novos}\n"
+            f"🚫 Pedidos ignorados: {total_ignorados}"
         )
     }

@@ -6,7 +6,8 @@ from utils.shopify import puxar_pedidos_pagos_em_lotes
 from utils.sheets import (
     append_aba,
     ler_aba,
-    ler_ids_existentes
+    ler_ids_existentes,
+    escrever_aba  # 👈 IMPORTANTE
 )
 
 # ======================================================
@@ -20,12 +21,16 @@ def gerar_clientes(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = df_pedidos.copy()
-    df["Data de criação"] = pd.to_datetime(df["Data de criação"], errors="coerce")
+
+    df["Data de criação"] = pd.to_datetime(
+        df["Data de criação"],
+        errors="coerce"
+    )
 
     clientes = (
         df
         .dropna(subset=["Customer ID"])
-        .groupby("Customer ID")
+        .groupby("Customer ID", as_index=False)
         .agg(
             Cliente=("Cliente", "first"),
             Email=("Email", "first"),
@@ -34,7 +39,6 @@ def gerar_clientes(df_pedidos: pd.DataFrame) -> pd.DataFrame:
             Primeira_Compra=("Data de criação", "min"),
             Ultima_Compra=("Data de criação", "max"),
         )
-        .reset_index()
     )
 
     return clientes
@@ -50,11 +54,11 @@ def sincronizar_shopify_com_planilha(
     """
     Fluxo:
     Shopify → Pedidos Shopify (append incremental)
-           → Clientes Shopify (recalculado)
+           → Clientes Shopify (recalculado / sobrescrito)
     """
 
     # ==================================================
-    # 1. IDS JÁ EXISTENTES
+    # 1. IDS JÁ EXISTENTES (ANTI-DUPLICAÇÃO)
     # ==================================================
     ids_existentes = ler_ids_existentes(
         planilha=nome_planilha,
@@ -63,16 +67,19 @@ def sincronizar_shopify_com_planilha(
     )
 
     total_novos = 0
+    total_processados = 0
 
     # ==================================================
-    # 2. BUSCA POR LOTES
+    # 2. BUSCA SHOPIFY POR LOTES
     # ==================================================
     for lote in puxar_pedidos_pagos_em_lotes(lote_tamanho):
 
         df_lote = pd.DataFrame(lote)
+        total_processados += len(df_lote)
+
         df_lote["Pedido ID"] = df_lote["Pedido ID"].astype(str)
 
-        # Remove duplicados
+        # Remove pedidos já existentes
         df_lote = df_lote[
             ~df_lote["Pedido ID"].isin(ids_existentes)
         ]
@@ -95,17 +102,20 @@ def sincronizar_shopify_com_planilha(
     if total_novos == 0:
         return {
             "status": "success",
-            "mensagem": "Nenhum pedido novo encontrado."
+            "mensagem": (
+                "Nenhum pedido novo encontrado.\n"
+                f"📦 Pedidos processados: {total_processados}"
+            )
         }
 
     # ==================================================
-    # 4. REGERAR CLIENTES (DERIVADO)
+    # 4. REGERAR CLIENTES (BASE DERIVADA)
     # ==================================================
     df_pedidos = ler_aba(nome_planilha, "Pedidos Shopify")
     df_clientes = gerar_clientes(df_pedidos)
 
-    # ⚠️ Base derivada → pode sobrescrever
-    append_aba(
+    # ⚠️ AQUI É SOBRESCREVER, NÃO APPEND
+    escrever_aba(
         planilha=nome_planilha,
         aba="Clientes Shopify",
         df=df_clientes
@@ -117,7 +127,8 @@ def sincronizar_shopify_com_planilha(
     return {
         "status": "success",
         "mensagem": (
-            f"✅ Sincronização concluída\n"
+            "✅ Sincronização concluída com sucesso\n"
+            f"📦 Pedidos processados: {total_processados}\n"
             f"🆕 Pedidos novos: {total_novos}\n"
             f"👥 Clientes atualizados: {len(df_clientes)}"
         )

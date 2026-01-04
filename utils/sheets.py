@@ -3,7 +3,7 @@ import gspread
 import pandas as pd
 from google.oauth2.service_account import Credentials
 
-@st.cache_resource
+
 def conectar_google_sheets():
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -17,11 +17,21 @@ def conectar_google_sheets():
 
     return gspread.authorize(creds)
 
-@st.cache_data(ttl=300)
-def carregar_aba(nome_planilha, nome_aba):
-    client = conectar_google_sheets()
-    sheet = client.open(nome_planilha)
-    ws = sheet.worksheet(nome_aba)
 
-    dados = ws.get_all_records()
-    return pd.DataFrame(dados)
+def ler_aba(planilha, aba):
+    client = conectar_google_sheets()
+    ws = client.open(planilha).worksheet(aba)
+    return pd.DataFrame(ws.get_all_records())
+
+
+def escrever_aba(planilha, aba, df: pd.DataFrame):
+    client = conectar_google_sheets()
+    sh = client.open(planilha)
+
+    try:
+        ws = sh.worksheet(aba)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
+
+    ws.clear()
+    ws.update([df.columns.tolist()] + df.values.tolist())

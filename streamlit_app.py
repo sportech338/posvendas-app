@@ -162,25 +162,80 @@ elif ordem == "Maior Qtd Pedidos":
 st.divider()
 
 # ======================================================
-# TABELA
+# 📋 TABELAS POR STATUS
 # ======================================================
-st.subheader("📋 Clientes")
 
-st.dataframe(
-    df_filtrado[
-        [
-            "Cliente",
-            "Email",
-            "Classificação",
-            "Qtd Pedidos",
-            "Valor Total",
-            "Primeiro Pedido",
-            "Último Pedido",
-            "Dias sem comprar"
-        ]
-    ],
-    use_container_width=True,
-    height=550
+COLUNAS_TABELA = [
+    "Cliente",
+    "Email",
+    "Classificação",
+    "Qtd Pedidos",
+    "Valor Total",
+    "Primeiro Pedido",
+    "Último Pedido",
+    "Dias sem comprar"
+]
+
+# -------------------------------
+# 🚨 EM RISCO
+# -------------------------------
+st.subheader("🚨 Em risco — ação imediata")
+
+df_risco = df_filtrado[
+    df_filtrado["Classificação"].str.contains("🚨", na=False)
+].sort_values(
+    ["Dias sem comprar", "Valor Total"],
+    ascending=[False, False]
 )
 
-st.caption(f"Mostrando {len(df_filtrado)} de {len(df)} clientes")
+st.dataframe(
+    df_risco[COLUNAS_TABELA],
+    use_container_width=True,
+    height=420
+)
+
+st.caption(f"{len(df_risco)} clientes em risco")
+st.divider()
+
+# -------------------------------
+# 🟢 BASE ATIVA
+# -------------------------------
+st.subheader("🟢 Base ativa")
+
+df_ativa = df_filtrado[
+    (~df_filtrado["Classificação"].str.contains("🚨", na=False)) &
+    (~df_filtrado["Classificação"].str.contains("💤", na=False)) &
+    (~df_filtrado["Classificação"].str.contains("não comprou", case=False, na=False))
+].sort_values(
+    ["Valor Total", "Último Pedido"],
+    ascending=[False, False]
+)
+
+st.dataframe(
+    df_ativa[COLUNAS_TABELA],
+    use_container_width=True,
+    height=420
+)
+
+st.caption(f"{len(df_ativa)} clientes ativos")
+st.divider()
+
+# -------------------------------
+# 💤 DORMENTES
+# -------------------------------
+st.subheader("💤 Dormentes — reativação")
+
+df_dormentes = df_filtrado[
+    df_filtrado["Classificação"].str.contains("💤", na=False)
+].sort_values(
+    ["Dias sem comprar"],
+    ascending=False
+)
+
+st.dataframe(
+    df_dormentes[COLUNAS_TABELA],
+    use_container_width=True,
+    height=420
+)
+
+st.caption(f"{len(df_dormentes)} clientes dormentes")

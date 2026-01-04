@@ -89,7 +89,7 @@ def puxar_pedidos_pagos_em_lotes(
             partes = link.split(",")
             for parte in partes:
                 if 'rel="next"' in parte:
-                    next_url = parte.split(";")[0].strip("<>")
+                    next_url = parte.split(";")[0].replace("<", "").replace(">", "").strip()
 
         url = next_url
         params = {}  # params só na primeira request

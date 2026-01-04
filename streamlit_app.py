@@ -27,7 +27,7 @@ st.subheader("🔄 Sincronização de dados")
 if st.button("🔄 Atualizar dados da Shopify"):
 
     status = st.empty()
-
+    st.cache_data.clear()
     ids_existentes = ler_ids_existentes(
         planilha=PLANILHA,
         aba="Pedidos Shopify",

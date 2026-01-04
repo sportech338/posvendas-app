@@ -7,7 +7,7 @@ from utils.sheets import (
     append_aba,
     ler_aba,
     ler_ids_existentes,
-    escrever_aba  # 👈 IMPORTANTE
+    escrever_aba
 )
 
 # ======================================================
@@ -16,21 +16,48 @@ from utils.sheets import (
 def gerar_clientes(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     """
     Consolida a base de clientes a partir da aba 'Pedidos Shopify'
+    - NÃO perde pedidos guest
+    - Valores financeiros corretos
     """
     if df_pedidos.empty:
         return pd.DataFrame()
 
     df = df_pedidos.copy()
 
+    # -------------------------------
+    # Datas
+    # -------------------------------
     df["Data de criação"] = pd.to_datetime(
         df["Data de criação"],
         errors="coerce"
     )
 
+    # -------------------------------
+    # Normalização de valores (CRÍTICO)
+    # -------------------------------
+    df["Valor Total"] = (
+        df["Valor Total"]
+        .astype(str)
+        .str.replace("R$", "", regex=False)
+        .str.replace(".", "", regex=False)
+        .str.replace(",", ".", regex=False)
+        .astype(float)
+        .fillna(0)
+    )
+
+    # -------------------------------
+    # Chave única de cliente
+    # Customer ID se existir, senão Email
+    # -------------------------------
+    df["Cliente_Key"] = df["Customer ID"].astype(str).str.strip()
+    df.loc[df["Cliente_Key"] == "", "Cliente_Key"] = df["Email"]
+
+    # -------------------------------
+    # Agrupamento final
+    # -------------------------------
     clientes = (
         df
-        .dropna(subset=["Customer ID"])
-        .groupby("Customer ID", as_index=False)
+        .groupby("Cliente_Key", as_index=False)
         .agg(
             Cliente=("Cliente", "first"),
             Email=("Email", "first"),
@@ -77,6 +104,9 @@ def sincronizar_shopify_com_planilha(
         df_lote = pd.DataFrame(lote)
         total_processados += len(df_lote)
 
+        if df_lote.empty:
+            continue
+
         df_lote["Pedido ID"] = df_lote["Pedido ID"].astype(str)
 
         # Remove pedidos já existentes
@@ -114,7 +144,6 @@ def sincronizar_shopify_com_planilha(
     df_pedidos = ler_aba(nome_planilha, "Pedidos Shopify")
     df_clientes = gerar_clientes(df_pedidos)
 
-    # ⚠️ AQUI É SOBRESCREVER, NÃO APPEND
     escrever_aba(
         planilha=nome_planilha,
         aba="Clientes Shopify",

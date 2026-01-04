@@ -144,17 +144,6 @@ def sincronizar_shopify_com_planilha(
             )
         }
 
-    # ==================================================
-    # 4. REGERAR CLIENTES (BASE DERIVADA)
-    # ==================================================
-    df_pedidos = ler_aba(nome_planilha, "Pedidos Shopify")
-    df_clientes = gerar_clientes(df_pedidos)
-
-    escrever_aba(
-        planilha=nome_planilha,
-        aba="Clientes Shopify",
-        df=df_clientes
-    )
 
     # ==================================================
     # 5. RETORNO

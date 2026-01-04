@@ -9,7 +9,7 @@ def puxar_pedidos_pagos_em_lotes(
     data_inicio: str = "2023-01-01T00:00:00-03:00"
 ):
     """
-    Busca TODOS os pedidos pagos da Shopify a partir de uma data (default: 01/01/2023)
+    Busca TODOS os pedidos pagos da Shopify a partir de uma data
     e retorna os dados em lotes (ex: 500 em 500).
 
     - Usa paginação oficial da Shopify (Link header)
@@ -30,7 +30,7 @@ def puxar_pedidos_pagos_em_lotes(
         "Content-Type": "application/json"
     }
 
-    # ⚠️ PARAMS SÓ NA PRIMEIRA CHAMADA
+    # ⚠️ PARAMS APENAS NA PRIMEIRA REQUEST
     params = {
         "financial_status": "paid",
         "status": "any",
@@ -46,7 +46,12 @@ def puxar_pedidos_pagos_em_lotes(
     # LOOP DE PAGINAÇÃO
     # =========================
     while url:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=30
+        )
         response.raise_for_status()
 
         orders = response.json().get("orders", [])
@@ -75,15 +80,19 @@ def puxar_pedidos_pagos_em_lotes(
                 buffer = []
 
         # =========================
-        # PAGINAÇÃO SHOPIFY
+        # PAGINAÇÃO SHOPIFY (CORRETA)
         # =========================
         link = response.headers.get("Link")
 
-        if link and 'rel="next"' in link:
-            url = link.split(";")[0].strip("<>")
-            params = {}  # params só na primeira request
-        else:
-            url = None
+        next_url = None
+        if link:
+            partes = link.split(",")
+            for parte in partes:
+                if 'rel="next"' in parte:
+                    next_url = parte.split(";")[0].strip("<>")
+
+        url = next_url
+        params = {}  # params só na primeira request
 
     # =========================
     # ÚLTIMO LOTE (RESTO)

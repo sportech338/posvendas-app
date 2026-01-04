@@ -3,4 +3,3 @@ pandas
 gspread
 google-auth
 requests
-python-dateutil

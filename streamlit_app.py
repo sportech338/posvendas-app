@@ -1,9 +1,11 @@
 import streamlit as st
 import pandas as pd
-from utils.sheets import carregar_aba
+
+from utils.sheets import ler_aba
+from utils.sync import sincronizar_shopify_com_planilha
 
 # ======================================================
-# CONFIG
+# CONFIGURAÇÃO GERAL
 # ======================================================
 st.set_page_config(
     page_title="Pós-vendas SporTech",
@@ -11,30 +13,60 @@ st.set_page_config(
 )
 
 st.title("📦 Dashboard Pós-vendas — SporTech")
-st.caption("Painel operacional por filas de trabalho (Shopify → Planilha → Streamlit)")
+st.caption("Fluxo: Shopify → Google Sheets → Streamlit")
+st.divider()
+
+PLANILHA = "Clientes Shopify"
+
+# ======================================================
+# 🔄 SINCRONIZAÇÃO SHOPIFY → PLANILHA
+# ======================================================
+st.subheader("🔄 Sincronização de dados")
+
+if st.button("🔄 Atualizar dados da Shopify"):
+    with st.spinner("Buscando pedidos pagos na Shopify..."):
+        resultado = sincronizar_shopify_com_planilha(PLANILHA)
+
+    if resultado["status"] == "success":
+        st.success(resultado["mensagem"])
+        st.cache_data.clear()
+        st.rerun()
+
+    elif resultado["status"] == "warning":
+        st.warning(resultado["mensagem"])
+
+    else:
+        st.error("❌ Erro inesperado durante a sincronização.")
+
 st.divider()
 
 # ======================================================
-# LOAD PLANILHA
+# 📄 CARREGAMENTO DA PLANILHA (CLIENTES)
 # ======================================================
-PLANILHA = "Clientes Shopify"
+df = ler_aba(PLANILHA, "Clientes Shopify")
 
-df = carregar_aba(PLANILHA, "Clientes Shopify")
+if df.empty:
+    st.info("ℹ️ Nenhum dado encontrado na planilha.")
+    st.stop()
+
 df.columns = df.columns.str.strip()
 df["Classificação"] = df["Classificação"].astype(str)
 
-# Garante colunas numéricas
+# Normalização de colunas numéricas
 df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
-df["Valor Total Gasto"] = pd.to_numeric(
-    df["Valor Total Gasto"].astype(str)
-        .str.replace("R$", "", regex=False)
-        .str.replace(".", "", regex=False)
-        .str.replace(",", ".", regex=False),
-    errors="coerce"
-).fillna(0)
+
+df["Valor Total Gasto"] = (
+    df["Valor Total Gasto"]
+    .astype(str)
+    .str.replace("R$", "", regex=False)
+    .str.replace(".", "", regex=False)
+    .str.replace(",", ".", regex=False)
+    .astype(float)
+    .fillna(0)
+)
 
 # ======================================================
-# PRIORIDADE OPERACIONAL
+# 🔢 PRIORIDADE OPERACIONAL
 # ======================================================
 def calcular_prioridade(classificacao: str) -> int:
     c = classificacao.lower()
@@ -45,7 +77,7 @@ def calcular_prioridade(classificacao: str) -> int:
     if "🚨" in classificacao and "promissor" in c: return 3
     if "🚨" in classificacao and "novo" in c: return 4
 
-    # 🟢 ATIVOS
+    # 🟢 BASE ATIVA
     if classificacao == "Campeão": return 5
     if classificacao == "Leal": return 6
     if classificacao == "Promissor": return 7
@@ -57,14 +89,16 @@ def calcular_prioridade(classificacao: str) -> int:
     if "💤" in classificacao and "promissor" in c: return 11
     if "💤" in classificacao and "novo" in c: return 12
 
-    # ⛔ FORA
+    # ⛔ FORA DO PÓS-VENDAS
     if "não comprou" in c: return 99
+
     return 100
+
 
 df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 
 # ======================================================
-# 🚨 EM RISCO / AÇÃO IMEDIATA
+# 🚨 EM RISCO — AÇÃO IMEDIATA
 # ======================================================
 st.subheader("🚨 Em risco — Ação imediata")
 
@@ -72,9 +106,8 @@ df_risco = df[df["Classificação"].str.contains("🚨", na=False)]
 
 filtro_risco = st.multiselect(
     "Filtrar por nível",
-    options=["Campeão", "Leal", "Promissor", "Novo"],
-    default=["Campeão", "Leal", "Promissor", "Novo"],
-    key="filtro_risco"
+    ["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"]
 )
 
 if filtro_risco:
@@ -96,7 +129,7 @@ st.dataframe(
             "Primeira Compra",
             "Última Compra",
             "Qtd Pedidos",
-            "Valor Total Gasto",
+            "Valor Total Gasto"
         ]
     ],
     use_container_width=True,
@@ -118,9 +151,8 @@ df_ativo = df[
 
 filtro_ativo = st.multiselect(
     "Filtrar por nível",
-    options=["Campeão", "Leal", "Promissor", "Novo"],
-    default=["Campeão", "Leal", "Promissor", "Novo"],
-    key="filtro_ativo"
+    ["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"]
 )
 
 if filtro_ativo:
@@ -140,7 +172,7 @@ st.dataframe(
             "Primeira Compra",
             "Última Compra",
             "Qtd Pedidos",
-            "Valor Total Gasto",
+            "Valor Total Gasto"
         ]
     ],
     use_container_width=True,
@@ -150,7 +182,7 @@ st.dataframe(
 st.divider()
 
 # ======================================================
-# 💤 DORMENTES / REATIVAÇÃO
+# 💤 DORMENTES — REATIVAÇÃO
 # ======================================================
 st.subheader("💤 Dormentes — Reativação")
 
@@ -158,9 +190,8 @@ df_dorm = df[df["Classificação"].str.contains("💤", na=False)]
 
 filtro_dorm = st.multiselect(
     "Filtrar por nível",
-    options=["Campeão", "Leal", "Promissor", "Novo"],
-    default=["Campeão", "Leal", "Promissor", "Novo"],
-    key="filtro_dorm"
+    ["Campeão", "Leal", "Promissor", "Novo"],
+    default=["Campeão", "Leal", "Promissor", "Novo"]
 )
 
 if filtro_dorm:
@@ -182,7 +213,7 @@ st.dataframe(
             "Primeira Compra",
             "Última Compra",
             "Qtd Pedidos",
-            "Valor Total Gasto",
+            "Valor Total Gasto"
         ]
     ],
     use_container_width=True,

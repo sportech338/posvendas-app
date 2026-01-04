@@ -102,6 +102,10 @@ st.divider()
 # 📄 CARREGAMENTO DA PLANILHA (CLIENTES)
 # ======================================================
 df = ler_aba(PLANILHA, "Clientes Shopify")
+df["Última Compra"] = pd.to_datetime(
+    df["Última Compra"],
+    errors="coerce"
+)
 
 if df.empty:
     st.info("ℹ️ Nenhum dado encontrado na planilha.")
@@ -163,8 +167,10 @@ def render_tabela(df, titulo, filtro_key):
     if filtro:
         df = df[df["Classificação"].str.contains("|".join(filtro), na=False)]
 
-    df = df.sort_values(["Prioridade", "Valor Total Gasto"], ascending=[True, False])
-
+    df = df.sort_values(
+        ["Prioridade", "Última Compra"],
+        ascending=[True, False]
+    )
     st.dataframe(
         df[
             [

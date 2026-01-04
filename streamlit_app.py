@@ -53,8 +53,8 @@ if df.empty:
 df.columns = df.columns.str.strip()
 
 # Datas
-df["Primeira_Compra"] = pd.to_datetime(df["Primeira_Compra"], errors="coerce")
-df["Ultima_Compra"] = pd.to_datetime(df["Ultima_Compra"], errors="coerce")
+df["Primeira Compra"] = pd.to_datetime(df["Primeira Compra"], errors="coerce")
+df["Última Compra"] = pd.to_datetime(df["Última Compra"], errors="coerce")
 
 # Numéricos
 df["Qtd_Pedidos"] = pd.to_numeric(df["Qtd_Pedidos"], errors="coerce").fillna(0)
@@ -121,10 +121,10 @@ def render_tabela(df_base, titulo, filtro_key):
                 "Classificação",
                 "Cliente",
                 "Email",
-                "Primeira_Compra",
-                "Ultima_Compra",
-                "Qtd_Pedidos",
-                "Valor_Total_Gasto"
+                "Primeira Compra",
+                "Última Compra",
+                "Qtd Pedidos",
+                "Valor Total"
             ]
         ],
         use_container_width=True,

@@ -84,8 +84,12 @@ def puxar_pedidos_pagos_em_lotes(
                 ).strip() or "SEM NOME",
                 "Email": o.get("email"),
                 "Valor Total": float(o.get("total_price", 0)),
-                "Pedido": o.get("order_number")
+                "Pedido": o.get("order_number"),
+                "Financial Status": o.get("financial_status"),
+                "Cancelled At": o.get("cancelled_at"),
+                "Total Refunded": float(o.get("total_refunded", 0))
             })
+
 
             # 🔹 Entrega lote completo
             if len(buffer) >= lote_tamanho:

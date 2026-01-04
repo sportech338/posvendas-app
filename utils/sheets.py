@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 
 
 # ======================================================
-# CONEXÃO
+# CONEXÃO GOOGLE
 # ======================================================
 @st.cache_resource
 def conectar_google_sheets():
@@ -25,11 +25,20 @@ def conectar_google_sheets():
 
 
 # ======================================================
+# ABRIR PLANILHA (CRÍTICO PARA EVITAR APIError)
+# ======================================================
+@st.cache_resource
+def abrir_planilha(nome_planilha: str):
+    client = conectar_google_sheets()
+    return client.open(nome_planilha)
+
+
+# ======================================================
 # LEITURA
 # ======================================================
 def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
-    client = conectar_google_sheets()
-    ws = client.open(planilha).worksheet(aba)
+    sh = abrir_planilha(planilha)
+    ws = sh.worksheet(aba)
     return pd.DataFrame(ws.get_all_records())
 
 
@@ -89,13 +98,12 @@ def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
 def append_aba(planilha: str, aba: str, df: pd.DataFrame):
     """
     Adiciona linhas no final da aba SEM apagar o conteúdo existente
-    (usado para Pedidos Shopify)
+    (Pedidos Shopify / Pedidos Ignorados)
     """
     if df.empty:
         return
 
-    client = conectar_google_sheets()
-    sh = client.open(planilha)
+    sh = abrir_planilha(planilha)
 
     try:
         ws = sh.worksheet(aba)
@@ -108,7 +116,7 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
     if not existente:
         ws.append_row(df.columns.tolist())
 
-    # ✅ NORMALIZA VALORES PT-BR AQUI
+    # ✅ Normaliza valores monetários pt-BR
     df = _normalizar_valores_ptbr(df)
 
     linhas = df.astype(str).values.tolist()
@@ -121,10 +129,9 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
 def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
     """
     SOBRESCREVE a aba inteira
-    (usado para Clientes Shopify — base derivada)
+    (Clientes Shopify, se voltar a usar no futuro)
     """
-    client = conectar_google_sheets()
-    sh = client.open(planilha)
+    sh = abrir_planilha(planilha)
 
     try:
         ws = sh.worksheet(aba)

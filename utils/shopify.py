@@ -2,6 +2,7 @@
 
 import requests
 import streamlit as st
+import time
 
 
 def puxar_pedidos_pagos_em_lotes(
@@ -13,6 +14,7 @@ def puxar_pedidos_pagos_em_lotes(
     e retorna os dados em lotes (ex: 500 em 500).
 
     - Usa paginação oficial da Shopify (Link header)
+    - Respeita rate limit da Shopify (429)
     - Para automaticamente quando não houver mais pedidos
     """
 
@@ -36,7 +38,7 @@ def puxar_pedidos_pagos_em_lotes(
         "status": "any",
         "limit": 250,  # máximo permitido pela Shopify
         "created_at_min": data_inicio,
-        "order": "created_at desc"  # do mais novo para o mais antigo
+        "order": "created_at desc"  # mais novos primeiro
     }
 
     buffer = []
@@ -52,6 +54,14 @@ def puxar_pedidos_pagos_em_lotes(
             params=params,
             timeout=30
         )
+
+        # =========================
+        # RATE LIMIT SHOPIFY
+        # =========================
+        if response.status_code == 429:
+            time.sleep(2)
+            continue
+
         response.raise_for_status()
 
         orders = response.json().get("orders", [])
@@ -89,7 +99,13 @@ def puxar_pedidos_pagos_em_lotes(
             partes = link.split(",")
             for parte in partes:
                 if 'rel="next"' in parte:
-                    next_url = parte.split(";")[0].replace("<", "").replace(">", "").strip()
+                    next_url = (
+                        parte
+                        .split(";")[0]
+                        .replace("<", "")
+                        .replace(">", "")
+                        .strip()
+                    )
 
         url = next_url
         params = {}  # params só na primeira request

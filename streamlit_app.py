@@ -70,11 +70,16 @@ df["Valor Total"] = (
     df["Valor Total"]
     .astype(str)
     .str.replace("R$", "", regex=False)
+    .str.replace(" ", "", regex=False)
     .str.replace(".", "", regex=False)
     .str.replace(",", ".", regex=False)
-    .astype(float)
-    .fillna(0)
 )
+
+df["Valor Total"] = pd.to_numeric(
+    df["Valor Total"],
+    errors="coerce"
+).fillna(0)
+
 
 df["Dias sem comprar"] = pd.to_numeric(
     df["Dias sem comprar"], errors="coerce"

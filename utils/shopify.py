@@ -15,7 +15,7 @@ def puxar_pedidos_pagos_em_lotes(
 
     - Usa paginação oficial da Shopify (Link header)
     - Respeita rate limit da Shopify (429)
-    - Para automaticamente quando não houver mais pedidos
+    - Trata pedidos sem customer (guest / importados)
     """
 
     # =========================
@@ -71,13 +71,16 @@ def puxar_pedidos_pagos_em_lotes(
             break
 
         for o in orders:
+            # 🔒 Customer pode ser None
+            customer = o.get("customer") or {}
+
             buffer.append({
-                "Pedido ID": str(o["id"]),
-                "Data de criação": o["created_at"],
-                "Customer ID": str(o["customer"]["id"]) if o.get("customer") else "",
+                "Pedido ID": str(o.get("id")),
+                "Data de criação": o.get("created_at"),
+                "Customer ID": str(customer.get("id", "")),
                 "Cliente": (
-                    f"{o.get('customer', {}).get('first_name', '')} "
-                    f"{o.get('customer', {}).get('last_name', '')}"
+                    f"{customer.get('first_name', '')} "
+                    f"{customer.get('last_name', '')}"
                 ).strip() or "SEM NOME",
                 "Email": o.get("email"),
                 "Valor Total": float(o.get("total_price", 0)),

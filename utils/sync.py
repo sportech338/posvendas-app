@@ -107,7 +107,13 @@ def sincronizar_shopify_com_planilha(
         if df_lote.empty:
             continue
 
-        df_lote["Pedido ID"] = df_lote["Pedido ID"].astype(str)
+        df_lote["Pedido ID"] = (
+            df_lote["Pedido ID"]
+            .astype(str)
+            .str.replace(".0", "", regex=False)
+            .str.strip()
+        )
+
 
         # Remove pedidos já existentes
         df_lote = df_lote[

@@ -33,15 +33,32 @@ def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
     return pd.DataFrame(ws.get_all_records())
 
 
+def _normalizar_id(valor) -> str:
+    if valor is None:
+        return ""
+    return (
+        str(valor)
+        .replace(".0", "")
+        .replace(",", "")
+        .strip()
+    )
+
+
 def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
     """
     Lê apenas a coluna de IDs para deduplicação
+    (normaliza IDs vindos do Google Sheets)
     """
     try:
         df = ler_aba(planilha, aba)
         if coluna_id not in df.columns:
             return set()
-        return set(df[coluna_id].astype(str).tolist())
+
+        return set(
+            df[coluna_id]
+            .apply(_normalizar_id)
+            .tolist()
+        )
     except Exception:
         return set()
 

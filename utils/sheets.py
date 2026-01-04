@@ -25,7 +25,7 @@ def conectar_google_sheets():
 
 
 # ======================================================
-# ABRIR PLANILHA (CRÍTICO PARA EVITAR APIError)
+# ABRIR PLANILHA (CACHEADO)
 # ======================================================
 @st.cache_resource
 def abrir_planilha(nome_planilha: str):
@@ -76,10 +76,10 @@ def _normalizar_valores_ptbr(df: pd.DataFrame) -> pd.DataFrame:
 def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
     """
     Lê apenas a coluna de IDs para deduplicação
-    (normaliza IDs vindos do Google Sheets)
     """
     try:
         df = ler_aba(planilha, aba)
+
         if coluna_id not in df.columns:
             return set()
 
@@ -93,7 +93,7 @@ def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
 
 
 # ======================================================
-# ESCRITA INCREMENTAL (APPEND)
+# ESCRITA INCREMENTAL (APPEND) — SEM get_all_values ❗
 # ======================================================
 def append_aba(planilha: str, aba: str, df: pd.DataFrame):
     """
@@ -107,20 +107,17 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
 
     try:
         ws = sh.worksheet(aba)
-        existente = ws.get_all_values()
     except gspread.exceptions.WorksheetNotFound:
         ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
-        ws.append_row(df.columns.tolist())
-        existente = []
-
-    if not existente:
         ws.append_row(df.columns.tolist())
 
     # ✅ Normaliza valores monetários pt-BR
     df = _normalizar_valores_ptbr(df)
 
-    linhas = df.astype(str).values.tolist()
-    ws.append_rows(linhas, value_input_option="USER_ENTERED")
+    ws.append_rows(
+        df.astype(str).values.tolist(),
+        value_input_option="USER_ENTERED"
+    )
 
 
 # ======================================================

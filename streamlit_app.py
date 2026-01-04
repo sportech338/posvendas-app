@@ -1,9 +1,10 @@
+# streamlit_app.py
+
 import streamlit as st
 import pandas as pd
 
-from utils.sheets import ler_aba, append_aba, ler_ids_existentes, escrever_aba
-from utils.shopify import puxar_pedidos_pagos_em_lotes
-from utils.sync import gerar_clientes
+from utils.sheets import ler_aba
+from utils.sync import sincronizar_shopify_com_planilha
 
 # ======================================================
 # CONFIGURAÇÃO GERAL
@@ -20,79 +21,18 @@ st.divider()
 PLANILHA = "Clientes Shopify"
 
 # ======================================================
-# 🔄 SINCRONIZAÇÃO SHOPIFY → PLANILHA (PROGRESSO REAL)
+# 🔄 SINCRONIZAÇÃO SHOPIFY → PLANILHA
 # ======================================================
 st.subheader("🔄 Sincronização de dados")
 
 if st.button("🔄 Atualizar dados da Shopify"):
+    with st.spinner("🔄 Sincronizando pedidos pagos da Shopify..."):
+        resultado = sincronizar_shopify_com_planilha(
+            nome_planilha=PLANILHA,
+            lote_tamanho=500
+        )
 
-    status = st.empty()
-    st.cache_data.clear()
-    ids_existentes = ler_ids_existentes(
-        planilha=PLANILHA,
-        aba="Pedidos Shopify",
-        coluna_id="Pedido ID"
-    )
-
-    total_lidos = 0
-    total_novos = 0
-    lote_atual = 0
-
-    with st.spinner("🔍 Buscando pedidos pagos desde 2023..."):
-
-        for lote in puxar_pedidos_pagos_em_lotes(
-            lote_tamanho=500,
-            data_inicio="2023-01-01T00:00:00-03:00"
-        ):
-            lote_atual += 1
-            df_lote = pd.DataFrame(lote)
-
-            total_lidos += len(df_lote)
-
-            df_lote["Pedido ID"] = df_lote["Pedido ID"].astype(str)
-
-            # Remove duplicados
-            df_lote = df_lote[
-                ~df_lote["Pedido ID"].isin(ids_existentes)
-            ]
-
-            if not df_lote.empty:
-                append_aba(
-                    planilha=PLANILHA,
-                    aba="Pedidos Shopify",
-                    df=df_lote
-                )
-
-                ids_existentes.update(df_lote["Pedido ID"].tolist())
-                total_novos += len(df_lote)
-
-            status.info(
-                f"📦 Lote {lote_atual}\n"
-                f"📥 Pedidos lidos: {total_lidos}\n"
-                f"🆕 Pedidos novos: {total_novos}"
-            )
-
-    # ==================================================
-    # 🔁 REGERAR CLIENTES (BASE DERIVADA)
-    # ==================================================
-    status.info("🔄 Recalculando base de clientes...")
-
-    df_pedidos = ler_aba(PLANILHA, "Pedidos Shopify")
-    df_clientes = gerar_clientes(df_pedidos)
-
-    escrever_aba(
-        planilha=PLANILHA,
-        aba="Clientes Shopify",
-        df=df_clientes
-    )
-
-    status.success(
-        "✅ Sincronização concluída com sucesso!\n\n"
-        f"📥 Pedidos lidos: {total_lidos}\n"
-        f"🆕 Pedidos novos: {total_novos}\n"
-        f"👥 Clientes atualizados: {len(df_clientes)}"
-    )
-
+    st.success(resultado["mensagem"])
     st.cache_data.clear()
     st.rerun()
 
@@ -107,32 +47,24 @@ if df.empty:
     st.info("ℹ️ Nenhum dado encontrado na planilha.")
     st.stop()
 
-# ✅ Limpa espaços nos nomes das colunas
+# ======================================================
+# 🧹 NORMALIZAÇÃO DE COLUNAS
+# ======================================================
 df.columns = df.columns.str.strip()
 
-# ✅ Garante que a coluna de data exista (aceita 3 variações)
-if "Última Compra" not in df.columns:
-    if "Ultima Compra" in df.columns:
-        df = df.rename(columns={"Ultima Compra": "Última Compra"})
-    elif "Ultima_Compra" in df.columns:
-        df = df.rename(columns={"Ultima_Compra": "Última Compra"})
+# Datas
+df["Primeira_Compra"] = pd.to_datetime(df["Primeira_Compra"], errors="coerce")
+df["Ultima_Compra"] = pd.to_datetime(df["Ultima_Compra"], errors="coerce")
 
-# ✅ Agora converte com segurança
-df["Última Compra"] = pd.to_datetime(df["Última Compra"], errors="coerce")
+# Numéricos
+df["Qtd_Pedidos"] = pd.to_numeric(df["Qtd_Pedidos"], errors="coerce").fillna(0)
+df["Valor_Total_Gasto"] = pd.to_numeric(
+    df["Valor_Total_Gasto"],
+    errors="coerce"
+).fillna(0)
 
+# Texto
 df["Classificação"] = df["Classificação"].astype(str)
-
-
-df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
-df["Valor Total Gasto"] = (
-    df["Valor Total Gasto"]
-    .astype(str)
-    .str.replace("R$", "", regex=False)
-    .str.replace(".", "", regex=False)
-    .str.replace(",", ".", regex=False)
-    .astype(float)
-    .fillna(0)
-)
 
 # ======================================================
 # PRIORIDADE OPERACIONAL
@@ -163,7 +95,7 @@ df["Prioridade"] = df["Classificação"].apply(calcular_prioridade)
 # ======================================================
 # FUNÇÃO AUXILIAR DE TABELA
 # ======================================================
-def render_tabela(df, titulo, filtro_key):
+def render_tabela(df_base, titulo, filtro_key):
     st.subheader(titulo)
 
     filtro = st.multiselect(
@@ -173,23 +105,26 @@ def render_tabela(df, titulo, filtro_key):
         key=filtro_key
     )
 
+    df = df_base.copy()
+
     if filtro:
         df = df[df["Classificação"].str.contains("|".join(filtro), na=False)]
 
     df = df.sort_values(
-        ["Prioridade", "Última Compra"],
+        ["Prioridade", "Ultima_Compra"],
         ascending=[True, False]
     )
+
     st.dataframe(
         df[
             [
                 "Classificação",
                 "Cliente",
                 "Email",
-                "Primeira Compra",
-                "Última Compra",
-                "Qtd Pedidos",
-                "Valor Total Gasto"
+                "Primeira_Compra",
+                "Ultima_Compra",
+                "Qtd_Pedidos",
+                "Valor_Total_Gasto"
             ]
         ],
         use_container_width=True,

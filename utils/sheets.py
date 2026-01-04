@@ -27,7 +27,6 @@ def conectar_google_sheets():
 # ======================================================
 # LEITURA
 # ======================================================
-@st.cache_data(ttl=300)
 def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
     client = conectar_google_sheets()
     ws = client.open(planilha).worksheet(aba)

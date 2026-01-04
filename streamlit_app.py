@@ -93,7 +93,13 @@ df["Classificação"] = df["Classificação"].astype(str)
 c1, c2, c3, c4 = st.columns(4)
 
 c1.metric("👥 Total de clientes", len(df))
-c2.metric("💰 Faturamento total", f"R$ {df['Valor Total'].sum():,.2f}")
+faturamento = df["Valor Total"].sum()
+
+c2.metric(
+    "💰 Faturamento total",
+    f"R$ {faturamento:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+)
+
 c3.metric("🏆 Campeões", len(df[df["Classificação"] == "Campeão"]))
 c4.metric("🚨 Em risco", len(df[df["Classificação"].str.contains("🚨", na=False)]))
 

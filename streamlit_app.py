@@ -1,32 +1,29 @@
 # streamlit_app.py
 
 import streamlit as st
-import pandas as pd
-
-from utils.sheets import ler_aba
 from utils.sync import sincronizar_shopify_com_planilha
 
 # ======================================================
 # CONFIGURAÇÃO GERAL
 # ======================================================
 st.set_page_config(
-    page_title="Pós-vendas SporTech",
+    page_title="Sync Pedidos Shopify — SporTech",
     layout="wide"
 )
 
-st.title("📦 Dashboard Pós-vendas — SporTech")
-st.caption("Fluxo: Shopify → Google Sheets → Streamlit")
+st.title("🔄 Sincronização de Pedidos — SporTech")
+st.caption("Shopify → Google Sheets (aba Pedidos Shopify)")
 st.divider()
 
 PLANILHA = "Clientes Shopify"
 
 # ======================================================
-# 🔄 SINCRONIZAÇÃO SHOPIFY → PLANILHA
+# 🔄 SINCRONIZAÇÃO SHOPIFY → PEDIDOS SHOPIFY
 # ======================================================
-st.subheader("🔄 Sincronização de dados")
+st.subheader("🔄 Sincronizar pedidos pagos")
 
 if st.button("🔄 Atualizar dados da Shopify"):
-    with st.spinner("🔄 Sincronizando pedidos pagos da Shopify..."):
+    with st.spinner("Buscando pedidos pagos na Shopify..."):
         resultado = sincronizar_shopify_com_planilha(
             nome_planilha=PLANILHA,
             lote_tamanho=500
@@ -34,7 +31,3 @@ if st.button("🔄 Atualizar dados da Shopify"):
 
     st.success(resultado["mensagem"])
     st.cache_data.clear()
-    st.rerun()
-
-st.divider()
-)

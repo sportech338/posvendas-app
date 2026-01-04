@@ -48,11 +48,12 @@ def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
 
 
 # ======================================================
-# ESCRITA (APPEND)
+# ESCRITA INCREMENTAL (APPEND)
 # ======================================================
 def append_aba(planilha: str, aba: str, df: pd.DataFrame):
     """
     Adiciona linhas no final da aba SEM apagar o conteúdo existente
+    (usado para Pedidos Shopify)
     """
     if df.empty:
         return
@@ -68,10 +69,32 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
         ws.append_row(df.columns.tolist())
         existente = []
 
-    # Se aba estiver vazia, cria cabeçalho
     if not existente:
         ws.append_row(df.columns.tolist())
 
-    # Converte DF para lista
     linhas = df.astype(str).values.tolist()
     ws.append_rows(linhas, value_input_option="USER_ENTERED")
+
+
+# ======================================================
+# ESCRITA TOTAL (SOBRESCREVER)
+# ======================================================
+def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
+    """
+    SOBRESCREVE a aba inteira
+    (usado para Clientes Shopify — base derivada)
+    """
+    client = conectar_google_sheets()
+    sh = client.open(planilha)
+
+    try:
+        ws = sh.worksheet(aba)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
+
+    ws.clear()
+    ws.update(
+        [df.columns.tolist()] +
+        df.astype(str).values.tolist(),
+        value_input_option="USER_ENTERED"
+    )

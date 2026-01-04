@@ -1,18 +1,13 @@
-# utils/shopify.py
 import requests
 import streamlit as st
 
 
-def puxar_pedidos_pagos_shopify():
-    """
-    Retorna TODOS os pedidos pagos da Shopify
-    """
-    shop_name = st.secrets["shopify"]["shop_name"]
+def puxar_pedidos_pagos():
+    shop = st.secrets["shopify"]["shop_name"]
     token = st.secrets["shopify"]["access_token"]
-    api_version = st.secrets["shopify"]["API_VERSION"]
+    version = st.secrets["shopify"]["API_VERSION"]
 
-    base_url = f"https://{shop_name}/admin/api/{api_version}/orders.json"
-
+    url = f"https://{shop}/admin/api/{version}/orders.json"
     headers = {
         "X-Shopify-Access-Token": token,
         "Content-Type": "application/json"
@@ -25,33 +20,27 @@ def puxar_pedidos_pagos_shopify():
     }
 
     pedidos = []
-    url = base_url
 
     while url:
-        resp = requests.get(url, headers=headers, params=params)
-        resp.raise_for_status()
+        r = requests.get(url, headers=headers, params=params)
+        r.raise_for_status()
 
-        data = resp.json().get("orders", [])
-
-        for order in data:
+        data = r.json().get("orders", [])
+        for o in data:
             pedidos.append({
-                "pedido_id": order.get("id"),
-                "data_criacao": order.get("created_at"),
-                "customer_id": order.get("customer", {}).get("id"),
-                "cliente": (
-                    f"{order.get('customer', {}).get('first_name', '')} "
-                    f"{order.get('customer', {}).get('last_name', '')}"
-                ).strip() or "SEM NOME",
-                "email": order.get("email"),
-                "valor_total": float(order.get("total_price", 0)),
-                "pedido": order.get("order_number")
+                "Pedido ID": o["id"],
+                "Data de criação": o["created_at"],
+                "Customer ID": o["customer"]["id"] if o.get("customer") else "",
+                "Cliente": f"{o.get('customer', {}).get('first_name','')} {o.get('customer', {}).get('last_name','')}".strip(),
+                "Email": o.get("email"),
+                "Valor Total": float(o.get("total_price", 0)),
+                "Pedido": o.get("order_number")
             })
 
-        # PAGINAÇÃO
-        link = resp.headers.get("Link")
+        link = r.headers.get("Link")
         if link and 'rel="next"' in link:
             url = link.split(";")[0].strip("<>")
-            params = {}  # params só na primeira chamada
+            params = {}
         else:
             url = None
 

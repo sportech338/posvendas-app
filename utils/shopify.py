@@ -36,7 +36,7 @@ def puxar_pedidos_pagos_em_lotes(
         "status": "any",
         "limit": 250,  # máximo permitido pela Shopify
         "created_at_min": data_inicio,
-        "order": "created_at asc"  # do mais antigo para o mais novo
+        "order": "created_at desc"  # do mais novo para o mais antigo
     }
 
     buffer = []

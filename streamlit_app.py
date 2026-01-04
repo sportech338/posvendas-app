@@ -120,6 +120,10 @@ if "Última Compra" not in df.columns:
 # ✅ Agora converte com segurança
 df["Última Compra"] = pd.to_datetime(df["Última Compra"], errors="coerce")
 
+# ✅ Garante que a coluna Classificação exista
+if "Classificação" not in df.columns:
+    df["Classificação"] = "Novo"
+
 df["Classificação"] = df["Classificação"].astype(str)
 
 

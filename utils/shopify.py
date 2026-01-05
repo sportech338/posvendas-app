@@ -121,14 +121,15 @@ def puxar_pedidos_pagos_em_lotes(
 
         for o in orders:
             customer = o.get("customer") or {}
+            shipping = o.get("shipping_address") or {}
 
             # Extrair dados do pedido
             pedido = {
                 "Pedido ID": str(o.get("id", "")),
                 "Data de criação": o.get("created_at"),  # ISO 8601
                 "Customer ID": str(customer.get("id", "")),
-                "Cliente": _extrair_nome_cliente(customer),
-                "Email": o.get("email", ""),
+                "Cliente": _extrair_nome_cliente(customer, shipping),
+                "Email": o.get("email") or "",
                 "Valor Total": float(o.get("total_price", 0)),
                 "Pedido": o.get("order_number"),
                 
@@ -162,17 +163,24 @@ def puxar_pedidos_pagos_em_lotes(
 # ======================================================
 # FUNÇÕES AUXILIARES
 # ======================================================
-def _extrair_nome_cliente(customer: dict) -> str:
+def _extrair_nome_cliente(customer: dict, shipping: dict = None) -> str:
     """
-    Extrai nome completo do cliente a partir do objeto customer.
-    Se não houver nome, retorna "SEM NOME".
+    Extrai nome do cliente.
+    Prioridade:
+    1. customer (perfil)
+    2. shipping_address (checkout)
+    3. fallback seguro
     """
-    first = customer.get("first_name", "").strip()
-    last = customer.get("last_name", "").strip()
-    
+    first = (customer.get("first_name") or "").strip()
+    last = (customer.get("last_name") or "").strip()
+
+    if not first and shipping:
+        first = (shipping.get("first_name") or "").strip()
+        last = (shipping.get("last_name") or "").strip()
+
     nome_completo = f"{first} {last}".strip()
-    
     return nome_completo if nome_completo else "SEM NOME"
+
 
 
 def _extrair_proxima_pagina(link_header: str) -> str:

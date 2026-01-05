@@ -71,7 +71,7 @@ with col_sync2:
                 
                 if resultado["status"] == "success":
                     st.success(resultado["mensagem"])
-                    # Limpar cache específico (AGORA A FUNÇÃO JÁ EXISTE!)
+                    # Limpar cache específico
                     carregar_clientes.clear()
                     st.rerun()  # Recarregar app automaticamente
                 elif resultado["status"] == "warning":
@@ -105,10 +105,17 @@ if df.empty:
 # ======================================================
 df.columns = df.columns.str.strip()
 
-# Validar colunas obrigatórias
+# Validar colunas obrigatórias (AGORA USA "Nível")
 colunas_obrigatorias = [
-    "Cliente", "Email", "Estado", "Classificação", 
-    "Qtd Pedidos", "Valor Total", "Ultimo Pedido", "Dias sem comprar"
+    "Customer ID",
+    "Cliente", 
+    "Email", 
+    "Estado", 
+    "Nível",
+    "Qtd Pedidos", 
+    "Valor Total", 
+    "Ultimo Pedido", 
+    "Dias sem comprar"
 ]
 
 colunas_faltantes = set(colunas_obrigatorias) - set(df.columns)
@@ -187,13 +194,13 @@ st.divider()
 
 
 # ======================================================
-# 📈 MÉTRICAS TOPO
+# 📈 MÉTRICAS TOPO (AGORA USA "Nível")
 # ======================================================
 col1, col2, col3, col4 = st.columns(4)
 
 total_clientes = len(df)
 faturamento_total = df["Valor Total"].sum()
-total_campeoes = len(df[df["Classificação"] == "Campeão"])
+total_campeoes = len(df[df["Nível"] == "Campeão"])
 total_em_risco = len(df[df["Estado"] == "🚨 Em risco"])
 
 col1.metric("👥 Total de clientes", f"{total_clientes:,}".replace(",", "."))
@@ -210,13 +217,13 @@ st.divider()
 
 
 # ======================================================
-# 📋 CONFIGURAÇÃO DAS TABELAS
+# 📋 CONFIGURAÇÃO DAS TABELAS (AGORA USA "Nível")
 # ======================================================
 COLUNAS_DISPLAY = [
     "Cliente",
     "Email",
     "Estado",
-    "Classificação",
+    "Nível",
     "Qtd Pedidos",
     "Valor Total",
     "Ultimo Pedido",
@@ -250,7 +257,7 @@ def formatar_tabela(df_input: pd.DataFrame) -> pd.DataFrame:
 
 
 # ======================================================
-# 🟢 BASE ATIVA
+# 🟢 BASE ATIVA (AGORA USA "Nível")
 # ======================================================
 st.subheader("🟢 Base ativa")
 
@@ -258,7 +265,7 @@ col_filtro1, col_info1 = st.columns([3, 1])
 
 with col_filtro1:
     filtro_ativa = st.multiselect(
-        "Filtrar Base ativa por classificação",
+        "Filtrar Base ativa por nível",
         CLASSIFICACOES,
         default=CLASSIFICACOES,
         key="filtro_ativa"
@@ -266,7 +273,7 @@ with col_filtro1:
 
 df_ativa = df[
     (df["Estado"] == "🟢 Ativo") &
-    (df["Classificação"].isin(filtro_ativa))
+    (df["Nível"].isin(filtro_ativa))
 ].sort_values(
     ["Valor Total", "Ultimo Pedido"],
     ascending=[False, False]
@@ -290,7 +297,7 @@ st.divider()
 
 
 # ======================================================
-# 🚨 EM RISCO
+# 🚨 EM RISCO (AGORA USA "Nível")
 # ======================================================
 st.subheader("🚨 Em risco — ação imediata")
 
@@ -298,7 +305,7 @@ col_filtro2, col_info2 = st.columns([3, 1])
 
 with col_filtro2:
     filtro_risco = st.multiselect(
-        "Filtrar Em risco por classificação",
+        "Filtrar Em risco por nível",
         CLASSIFICACOES,
         default=CLASSIFICACOES,
         key="filtro_risco"
@@ -306,7 +313,7 @@ with col_filtro2:
 
 df_risco = df[
     (df["Estado"] == "🚨 Em risco") &
-    (df["Classificação"].isin(filtro_risco))
+    (df["Nível"].isin(filtro_risco))
 ].sort_values(
     ["Dias sem comprar", "Valor Total"],
     ascending=[False, False]
@@ -330,7 +337,7 @@ st.divider()
 
 
 # ======================================================
-# 💤 DORMENTES
+# 💤 DORMENTES (AGORA USA "Nível")
 # ======================================================
 st.subheader("💤 Dormentes — reativação")
 
@@ -338,7 +345,7 @@ col_filtro3, col_info3 = st.columns([3, 1])
 
 with col_filtro3:
     filtro_dormentes = st.multiselect(
-        "Filtrar Dormentes por classificação",
+        "Filtrar Dormentes por nível",
         CLASSIFICACOES,
         default=CLASSIFICACOES,
         key="filtro_dormentes"
@@ -346,7 +353,7 @@ with col_filtro3:
 
 df_dormentes = df[
     (df["Estado"] == "💤 Dormente") &
-    (df["Classificação"].isin(filtro_dormentes))
+    (df["Nível"].isin(filtro_dormentes))
 ].sort_values(
     ["Dias sem comprar"],
     ascending=False

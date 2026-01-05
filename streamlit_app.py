@@ -56,8 +56,16 @@ if df.empty:
 # ======================================================
 df.columns = df.columns.str.strip()
 
-df["Primeiro Pedido"] = pd.to_datetime(df["Primeiro Pedido"], errors="coerce")
-df["Último Pedido"] = pd.to_datetime(df["Último Pedido"], errors="coerce")
+df["Primeiro Pedido"] = (
+    pd.to_datetime(df["Primeiro Pedido"], errors="coerce", utc=True)
+      .dt.tz_localize(None)
+)
+
+df["Último Pedido"] = (
+    pd.to_datetime(df["Último Pedido"], errors="coerce", utc=True)
+      .dt.tz_localize(None)
+)
+
 
 df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
 

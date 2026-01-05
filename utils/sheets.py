@@ -34,12 +34,34 @@ def abrir_planilha(nome_planilha: str):
 
 
 # ======================================================
-# LEITURA (SANITIZADA)
+# CONVERSÃO DE VALORES BR → FLOAT
+# ======================================================
+def _converter_valor_br_para_float(serie: pd.Series) -> pd.Series:
+    """
+    Converte valores em formato brasileiro (R$ 1.234,56) para float
+    Usado automaticamente ao ler planilhas
+    """
+    return (
+        serie
+        .astype(str)
+        .str.replace("R$", "", regex=False)
+        .str.replace(" ", "", regex=False)
+        .str.replace(".", "", regex=False)   # Remove milhar
+        .str.replace(",", ".", regex=False)  # Vírgula → ponto
+        .str.strip()
+        .pipe(pd.to_numeric, errors="coerce")
+        .fillna(0)
+    )
+
+
+# ======================================================
+# LEITURA (SANITIZADA E COM CONVERSÃO AUTOMÁTICA)
 # ======================================================
 def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
     """
     Lê uma aba do Google Sheets e retorna DataFrame
-    com saneamento básico de strings (sem conversão de tipos).
+    ✅ Converte valores monetários automaticamente
+    ✅ Limpa strings invisíveis
     """
     sh = abrir_planilha(planilha)
     ws = sh.worksheet(aba)
@@ -49,7 +71,7 @@ def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
     if df.empty:
         return df
 
-    # 🔒 Limpa strings invisíveis que quebram parse depois
+    # 🔒 Limpa strings invisíveis que quebram parse
     for col in df.select_dtypes(include="object").columns:
         df[col] = (
             df[col]
@@ -57,6 +79,10 @@ def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
             .str.replace("\xa0", " ", regex=False)  # NBSP
             .str.strip()
         )
+    
+    # ✅ CONVERSÃO AUTOMÁTICA DE VALORES MONETÁRIOS
+    if "Valor Total" in df.columns:
+        df["Valor Total"] = _converter_valor_br_para_float(df["Valor Total"])
 
     return df
 
@@ -114,25 +140,21 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
         ws.append_row(df.columns.tolist())
 
     # ✅ CONVERTE PARA LISTA PRESERVANDO TIPOS
-    # Números ficam como números, strings como strings
     valores = []
     for _, row in df.iterrows():
         linha = []
         for val in row:
-            # Se for número, manda como número
             if pd.notna(val) and isinstance(val, (int, float)):
                 linha.append(val)
-            # Se for NaN/None, manda string vazia
             elif pd.isna(val):
                 linha.append("")
-            # Resto como string
             else:
                 linha.append(str(val))
         valores.append(linha)
 
     ws.append_rows(
         valores,
-        value_input_option="USER_ENTERED"  # Deixa Sheets interpretar tipos
+        value_input_option="USER_ENTERED"
     )
 
 
@@ -153,7 +175,6 @@ def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
 
     ws.clear()
     
-    # ✅ CONVERTE PARA LISTA PRESERVANDO TIPOS
     valores = [df.columns.tolist()]
     for _, row in df.iterrows():
         linha = []

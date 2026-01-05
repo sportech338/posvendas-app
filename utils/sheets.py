@@ -34,12 +34,31 @@ def abrir_planilha(nome_planilha: str):
 
 
 # ======================================================
-# LEITURA
+# LEITURA (SANITIZADA)
 # ======================================================
 def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
+    """
+    Lê uma aba do Google Sheets e retorna DataFrame
+    com saneamento básico de strings (sem conversão de tipos).
+    """
     sh = abrir_planilha(planilha)
     ws = sh.worksheet(aba)
-    return pd.DataFrame(ws.get_all_records())
+
+    df = pd.DataFrame(ws.get_all_records())
+
+    if df.empty:
+        return df
+
+    # 🔒 Limpa strings invisíveis que quebram parse depois
+    for col in df.select_dtypes(include="object").columns:
+        df[col] = (
+            df[col]
+            .astype(str)
+            .str.replace("\xa0", " ", regex=False)  # NBSP
+            .str.strip()
+        )
+
+    return df
 
 
 # ======================================================
@@ -93,12 +112,11 @@ def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
 
 
 # ======================================================
-# ESCRITA INCREMENTAL (APPEND) — SEM get_all_values ❗
+# ESCRITA INCREMENTAL (APPEND)
 # ======================================================
 def append_aba(planilha: str, aba: str, df: pd.DataFrame):
     """
     Adiciona linhas no final da aba SEM apagar o conteúdo existente
-    (Pedidos Shopify / Pedidos Ignorados)
     """
     if df.empty:
         return
@@ -126,7 +144,6 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
 def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
     """
     SOBRESCREVE a aba inteira
-    (Clientes Shopify, se voltar a usar no futuro)
     """
     sh = abrir_planilha(planilha)
 

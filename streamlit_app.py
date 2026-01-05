@@ -54,30 +54,6 @@ if df_pedidos.empty:
     st.warning("Nenhum pedido encontrado na aba Pedidos Shopify.")
     st.stop()
 
-# ======================================================
-# 🔍 DEBUG COMPLETO - ADICIONAR ISTO
-# ======================================================
-with st.expander("🔍 DEBUG COMPLETO - Ver dados brutos", expanded=True):
-    st.write("### 1️⃣ Dados DIRETO da planilha (primeiras 5 linhas)")
-    st.dataframe(df_pedidos.head())
-    
-    st.write("### 2️⃣ Informações da coluna 'Valor Total'")
-    st.write(f"- **Tipo da coluna:** `{df_pedidos['Valor Total'].dtype}`")
-    st.write(f"- **Primeiros 10 valores RAW:**")
-    st.write(df_pedidos['Valor Total'].head(10).tolist())
-    
-    st.write("### 3️⃣ Conversão para numérico")
-    valores_numericos = pd.to_numeric(df_pedidos["Valor Total"], errors="coerce")
-    st.write(f"- **Após conversão (primeiros 10):**")
-    st.write(valores_numericos.head(10).tolist())
-    st.write(f"- **Quantidade de NaN após conversão:** {valores_numericos.isna().sum()}")
-    st.write(f"- **Soma ANTES de fillna(0):** R$ {valores_numericos.sum():,.2f}")
-    
-    st.write("### 4️⃣ Verificar se existe a coluna")
-    st.write(f"- **Colunas disponíveis:** {df_pedidos.columns.tolist()}")
-
-st.divider()
-
 
 # ======================================================
 # 🔧 NORMALIZAÇÃO E LIMPEZA
@@ -85,10 +61,23 @@ st.divider()
 # Limpar nomes das colunas
 df_pedidos.columns = df_pedidos.columns.str.strip()
 
-# 🔢 CONVERTER VALOR TOTAL PRIMEIRO (ANTES DE QUALQUER AGRUPAMENTO)
-df_pedidos["Valor Total"] = pd.to_numeric(
-    df_pedidos["Valor Total"], errors="coerce"
-).fillna(0)
+# ✅ CONVERTER VALOR TOTAL (REMOVER FORMATAÇÃO BRASILEIRA)
+if "Valor Total" in df_pedidos.columns:
+    df_pedidos["Valor Total"] = (
+        df_pedidos["Valor Total"]
+        .astype(str)
+        .str.replace("R$", "", regex=False)   # Remove R$
+        .str.replace(" ", "", regex=False)     # Remove espaços
+        .str.replace(".", "", regex=False)     # Remove separador de milhar (1.234 → 1234)
+        .str.replace(",", ".", regex=False)    # Converte vírgula decimal para ponto (96,90 → 96.90)
+        .str.strip()
+    )
+    
+    # Agora converte para número
+    df_pedidos["Valor Total"] = pd.to_numeric(
+        df_pedidos["Valor Total"], 
+        errors="coerce"
+    ).fillna(0)
 
 # Normalizar datas
 df_pedidos["Data de criação"] = (
@@ -96,6 +85,20 @@ df_pedidos["Data de criação"] = (
     .dt.tz_convert("America/Sao_Paulo")
     .dt.tz_localize(None)
 )
+
+
+# ======================================================
+# 🔍 DEBUG (OPCIONAL - PODE REMOVER DEPOIS)
+# ======================================================
+with st.expander("🔍 DEBUG - Verificar conversão de valores", expanded=False):
+    st.write("**Após limpeza e conversão:**")
+    st.write(f"- Tipo da coluna: `{df_pedidos['Valor Total'].dtype}`")
+    st.write(f"- Primeiros 10 valores: {df_pedidos['Valor Total'].head(10).tolist()}")
+    st.write(f"- Soma total: R$ {df_pedidos['Valor Total'].sum():,.2f}")
+    st.write(f"- Valores zerados: {(df_pedidos['Valor Total'] == 0).sum()}")
+
+st.divider()
+
 
 # ======================================================
 # 🔑 CHAVE DO CLIENTE
@@ -122,13 +125,13 @@ df = (
         Cliente=("Cliente", "last"),
         Email=("Email", "last"),
         Qtd_Pedidos=("Pedido ID", "count"),
-        Valor_Total=("Valor Total", "sum"),  # Soma dos valores
+        Valor_Total=("Valor Total", "sum"),
         Primeiro_Pedido=("Data de criação", "min"),
         Ultimo_Pedido=("Data de criação", "max"),
     )
 )
 
-# Renomear coluna para padronizar
+# Renomear colunas para padronizar
 df = df.rename(columns={
     "Valor_Total": "Valor Total",
     "Primeiro_Pedido": "Primeiro Pedido",

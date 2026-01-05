@@ -1,8 +1,8 @@
 # utils/classificacao.py
 
 import pandas as pd
-from datetime import datetime
 import pytz
+from typing import Dict, List
 
 
 # ======================================================
@@ -31,14 +31,31 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     - Ultimo Pedido
     - Dias sem comprar
     - Classificação (Novo/Promissor/Leal/Campeão)
+    
+    Raises:
+        ValueError: Se colunas obrigatórias estiverem ausentes
     """
     
     if df_pedidos.empty:
         return pd.DataFrame()
     
+    # Validar colunas obrigatórias
+    colunas_obrigatorias = [
+        "Pedido ID", "Customer ID", "Cliente", 
+        "Email", "Valor Total", "Data de criação"
+    ]
+    colunas_faltantes = set(colunas_obrigatorias) - set(df_pedidos.columns)
+    
+    if colunas_faltantes:
+        raise ValueError(
+            f"❌ Colunas obrigatórias ausentes: {', '.join(colunas_faltantes)}"
+        )
+    
     # ======================================================
     # 1. CRIAR CHAVE ÚNICA (Customer ID)
     # ======================================================
+    df_pedidos = df_pedidos.copy()  # Evitar SettingWithCopyWarning
+    
     df_pedidos["cliente_key"] = (
         df_pedidos["Customer ID"]
         .astype(str)
@@ -46,8 +63,13 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     )
     
     # Fallback para clientes sem Customer ID (casos raros)
-    df_pedidos.loc[df_pedidos["cliente_key"] == "", "cliente_key"] = (
-        "EMAIL_" + df_pedidos["Email"].astype(str).str.lower().str.strip()
+    mask_sem_id = df_pedidos["cliente_key"].isin(["", "nan", "None"])
+    df_pedidos.loc[mask_sem_id, "cliente_key"] = (
+        "EMAIL_" + 
+        df_pedidos.loc[mask_sem_id, "Email"]
+        .astype(str)
+        .str.lower()
+        .str.strip()
     )
     
     # ======================================================
@@ -67,7 +89,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         )
     )
     
-    # Renomear colunas
+    # Renomear colunas para padrão final
     df_clientes = df_clientes.rename(columns={
         "Customer_ID": "Customer ID",
         "Valor_Total": "Valor Total",
@@ -81,6 +103,9 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     # ======================================================
     hoje = pd.Timestamp.now(tz=pytz.timezone("America/Sao_Paulo")).tz_localize(None)
     df_clientes["Dias sem comprar"] = (hoje - df_clientes["Ultimo Pedido"]).dt.days
+    
+    # Garantir que não há valores negativos (edge case)
+    df_clientes["Dias sem comprar"] = df_clientes["Dias sem comprar"].clip(lower=0)
     
     # ======================================================
     # 4. CLASSIFICAR CLIENTES
@@ -99,9 +124,10 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     )
     
     # ======================================================
-    # 6. REMOVER COLUNA AUXILIAR
+    # 6. REMOVER COLUNA AUXILIAR E RESETAR INDEX
     # ======================================================
     df_clientes = df_clientes.drop(columns=["cliente_key"], errors="ignore")
+    df_clientes = df_clientes.reset_index(drop=True)
     
     return df_clientes
 
@@ -111,12 +137,20 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
 # ======================================================
 def _calcular_classificacao(row) -> str:
     """
-    Classifica cliente baseado em:
-    - Recency (Dias sem comprar)
-    - Frequency (Quantidade de pedidos)
-    - Monetary (Valor total gasto)
+    Classifica cliente baseado em RFM (Recency, Frequency, Monetary).
     
-    Retorna: "Novo", "Promissor", "Leal" ou "Campeão"
+    Critérios:
+    - Campeão: (5+ pedidos OU R$ 5.000+) E ativo há < 60 dias
+    - Leal: (3+ pedidos OU R$ 2.000+) E ativo há < 90 dias
+    - Promissor: (2+ pedidos OU R$ 500+) E ativo há < 120 dias
+    - Novo: 1 pedido e ativo há < 90 dias
+    
+    Args:
+        row: Linha do DataFrame com as colunas:
+             "Qtd Pedidos", "Valor Total", "Dias sem comprar"
+    
+    Returns:
+        str: "Campeão", "Leal", "Promissor" ou "Novo"
     """
     qtd = row["Qtd Pedidos"]
     valor = row["Valor Total"]
@@ -145,27 +179,45 @@ def _calcular_classificacao(row) -> str:
 # ======================================================
 # CALCULAR CICLO MÉDIO DE COMPRA
 # ======================================================
-def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> dict:
+def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
     """
     Analisa clientes recorrentes e retorna estatísticas
     sobre o ciclo médio de compra.
     
-    Retorna:
-    {
-        "ciclo_mediana": float,  # Mediana do ciclo em dias
-        "ciclo_media": float,    # Média do ciclo em dias
-        "threshold_ativo": int,  # Sugestão para "Ativo"
-        "threshold_risco": int,  # Sugestão para "Em Risco"
-        "threshold_dormente": int,  # Sugestão para "Dormente"
-        "total_recorrentes": int  # Qtd de clientes analisados
-    }
+    Args:
+        df_clientes: DataFrame com clientes agregados
+                     (deve ter colunas "Qtd Pedidos", "Primeiro Pedido", "Ultimo Pedido")
+    
+    Returns:
+        dict: {
+            "ciclo_mediana": float | None,
+            "ciclo_media": float | None,
+            "threshold_ativo": int,
+            "threshold_risco": int,
+            "threshold_dormente": int,
+            "total_recorrentes": int
+        }
+    
+    Exemplo:
+        >>> ciclo = calcular_ciclo_medio(df_clientes)
+        >>> print(f"Ciclo médio: {ciclo['ciclo_mediana']} dias")
     """
+    
+    if df_clientes.empty:
+        return {
+            "ciclo_mediana": None,
+            "ciclo_media": None,
+            "threshold_ativo": 45,
+            "threshold_risco": 90,
+            "threshold_dormente": 90,
+            "total_recorrentes": 0
+        }
     
     # Filtrar apenas clientes com 2+ pedidos
     clientes_recorrentes = df_clientes[df_clientes["Qtd Pedidos"] >= 2].copy()
     
     if len(clientes_recorrentes) < 5:
-        # Poucos dados para análise, retorna valores padrão
+        # Poucos dados para análise confiável
         return {
             "ciclo_mediana": None,
             "ciclo_media": None,
@@ -187,7 +239,22 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> dict:
         (clientes_recorrentes["Qtd Pedidos"] - 1)
     )
     
-    # Remover valores extremos (outliers)
+    # Remover valores inválidos (zero ou negativos)
+    clientes_recorrentes = clientes_recorrentes[
+        clientes_recorrentes["Ciclo_Medio"] > 0
+    ]
+    
+    if clientes_recorrentes.empty:
+        return {
+            "ciclo_mediana": None,
+            "ciclo_media": None,
+            "threshold_ativo": 45,
+            "threshold_risco": 90,
+            "threshold_dormente": 90,
+            "total_recorrentes": 0
+        }
+    
+    # Estatísticas
     ciclo_mediana = clientes_recorrentes["Ciclo_Medio"].median()
     ciclo_media = clientes_recorrentes["Ciclo_Medio"].mean()
     
@@ -217,20 +284,36 @@ def calcular_estado(
     Adiciona coluna "Estado" ao DataFrame de clientes
     baseado em dias sem comprar.
     
-    Parâmetros:
-    - threshold_risco: dias para classificar como "Em risco"
-    - threshold_dormente: dias para classificar como "Dormente"
+    Args:
+        df_clientes: DataFrame com clientes
+        threshold_risco: Dias para classificar como "Em risco" (padrão: 45)
+        threshold_dormente: Dias para classificar como "Dormente" (padrão: 90)
     
-    Retorna DataFrame com coluna "Estado" adicionada.
+    Returns:
+        pd.DataFrame: DataFrame original com coluna "Estado" adicionada
+    
+    Estados possíveis:
+        - "🟢 Ativo": < threshold_risco dias
+        - "🚨 Em risco": entre threshold_risco e threshold_dormente dias
+        - "💤 Dormente": >= threshold_dormente dias
+    
+    Exemplo:
+        >>> df = calcular_estado(df, threshold_risco=60, threshold_dormente=120)
     """
     
+    if df_clientes.empty:
+        return df_clientes
+    
     def _classificar_estado(dias):
+        if pd.isna(dias):
+            return "🟢 Ativo"  # Fallback seguro
         if dias >= threshold_dormente:
             return "💤 Dormente"
         if dias >= threshold_risco:
             return "🚨 Em risco"
         return "🟢 Ativo"
     
+    df_clientes = df_clientes.copy()
     df_clientes["Estado"] = df_clientes["Dias sem comprar"].apply(_classificar_estado)
     
     return df_clientes
@@ -246,11 +329,19 @@ def filtrar_por_estado(
     """
     Filtra clientes por estado específico.
     
-    Parâmetros:
-    - estado: "🟢 Ativo", "🚨 Em risco" ou "💤 Dormente"
+    Args:
+        df_clientes: DataFrame com clientes
+        estado: "🟢 Ativo", "🚨 Em risco" ou "💤 Dormente"
     
-    Retorna DataFrame filtrado.
+    Returns:
+        pd.DataFrame: DataFrame filtrado
+    
+    Exemplo:
+        >>> clientes_risco = filtrar_por_estado(df, "🚨 Em risco")
     """
+    if "Estado" not in df_clientes.columns:
+        raise ValueError("❌ Coluna 'Estado' não encontrada! Execute calcular_estado() primeiro.")
+    
     return df_clientes[df_clientes["Estado"] == estado].copy()
 
 
@@ -259,46 +350,61 @@ def filtrar_por_estado(
 # ======================================================
 def filtrar_por_classificacao(
     df_clientes: pd.DataFrame,
-    classificacoes: list
+    classificacoes: List[str]
 ) -> pd.DataFrame:
     """
-    Filtra clientes por classificação(ões).
+    Filtra clientes por uma ou mais classificações.
     
-    Parâmetros:
-    - classificacoes: lista como ["Campeão", "Leal"]
+    Args:
+        df_clientes: DataFrame com clientes
+        classificacoes: Lista de classificações, ex: ["Campeão", "Leal"]
     
-    Retorna DataFrame filtrado.
+    Returns:
+        pd.DataFrame: DataFrame filtrado
+    
+    Exemplo:
+        >>> vips = filtrar_por_classificacao(df, ["Campeão", "Leal"])
     """
+    if "Classificação" not in df_clientes.columns:
+        raise ValueError("❌ Coluna 'Classificação' não encontrada!")
+    
     return df_clientes[df_clientes["Classificação"].isin(classificacoes)].copy()
 
 
 # ======================================================
 # MÉTRICAS AGREGADAS
 # ======================================================
-def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> dict:
+def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> Dict:
     """
     Calcula métricas gerais da base de clientes.
     
-    Retorna:
-    {
-        "total_clientes": int,
-        "faturamento_total": float,
-        "ticket_medio": float,
-        "total_campeoes": int,
-        "total_leais": int,
-        "total_promissores": int,
-        "total_novos": int,
-        "total_ativos": int,
-        "total_em_risco": int,
-        "total_dormentes": int
-    }
+    Args:
+        df_clientes: DataFrame com clientes agregados
+    
+    Returns:
+        dict: {
+            "total_clientes": int,
+            "faturamento_total": float,
+            "ticket_medio": float,
+            "total_campeoes": int,
+            "total_leais": int,
+            "total_promissores": int,
+            "total_novos": int,
+            "total_ativos": int,
+            "total_em_risco": int,
+            "total_dormentes": int
+        }
+    
+    Exemplo:
+        >>> metricas = calcular_metricas_gerais(df)
+        >>> print(f"Faturamento: R$ {metricas['faturamento_total']:,.2f}")
     """
     
     if df_clientes.empty:
         return {
             "total_clientes": 0,
-            "faturamento_total": 0,
-            "ticket_medio": 0,
+            "faturamento_total": 0.0,
+            "ticket_medio": 0.0,
             "total_campeoes": 0,
             "total_leais": 0,
             "total_promissores": 0,
@@ -309,18 +415,27 @@ def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> dict:
         }
     
     total_clientes = len(df_clientes)
-    faturamento_total = df_clientes["Valor Total"].sum()
-    ticket_medio = faturamento_total / total_clientes if total_clientes > 0 else 0
+    faturamento_total = float(df_clientes["Valor Total"].sum())
+    ticket_medio = faturamento_total / total_clientes if total_clientes > 0 else 0.0
+    
+    # Contar por classificação
+    contagem_classificacao = df_clientes["Classificação"].value_counts().to_dict()
+    
+    # Contar por estado (se coluna existir)
+    if "Estado" in df_clientes.columns:
+        contagem_estado = df_clientes["Estado"].value_counts().to_dict()
+    else:
+        contagem_estado = {}
     
     return {
         "total_clientes": total_clientes,
         "faturamento_total": faturamento_total,
         "ticket_medio": ticket_medio,
-        "total_campeoes": len(df_clientes[df_clientes["Classificação"] == "Campeão"]),
-        "total_leais": len(df_clientes[df_clientes["Classificação"] == "Leal"]),
-        "total_promissores": len(df_clientes[df_clientes["Classificação"] == "Promissor"]),
-        "total_novos": len(df_clientes[df_clientes["Classificação"] == "Novo"]),
-        "total_ativos": len(df_clientes[df_clientes["Estado"] == "🟢 Ativo"]),
-        "total_em_risco": len(df_clientes[df_clientes["Estado"] == "🚨 Em risco"]),
-        "total_dormentes": len(df_clientes[df_clientes["Estado"] == "💤 Dormente"])
+        "total_campeoes": contagem_classificacao.get("Campeão", 0),
+        "total_leais": contagem_classificacao.get("Leal", 0),
+        "total_promissores": contagem_classificacao.get("Promissor", 0),
+        "total_novos": contagem_classificacao.get("Novo", 0),
+        "total_ativos": contagem_estado.get("🟢 Ativo", 0),
+        "total_em_risco": contagem_estado.get("🚨 Em risco", 0),
+        "total_dormentes": contagem_estado.get("💤 Dormente", 0)
     }

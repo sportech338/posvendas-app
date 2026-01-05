@@ -54,6 +54,30 @@ if df_pedidos.empty:
     st.warning("Nenhum pedido encontrado na aba Pedidos Shopify.")
     st.stop()
 
+# ======================================================
+# 🔍 DEBUG COMPLETO - ADICIONAR ISTO
+# ======================================================
+with st.expander("🔍 DEBUG COMPLETO - Ver dados brutos", expanded=True):
+    st.write("### 1️⃣ Dados DIRETO da planilha (primeiras 5 linhas)")
+    st.dataframe(df_pedidos.head())
+    
+    st.write("### 2️⃣ Informações da coluna 'Valor Total'")
+    st.write(f"- **Tipo da coluna:** `{df_pedidos['Valor Total'].dtype}`")
+    st.write(f"- **Primeiros 10 valores RAW:**")
+    st.write(df_pedidos['Valor Total'].head(10).tolist())
+    
+    st.write("### 3️⃣ Conversão para numérico")
+    valores_numericos = pd.to_numeric(df_pedidos["Valor Total"], errors="coerce")
+    st.write(f"- **Após conversão (primeiros 10):**")
+    st.write(valores_numericos.head(10).tolist())
+    st.write(f"- **Quantidade de NaN após conversão:** {valores_numericos.isna().sum()}")
+    st.write(f"- **Soma ANTES de fillna(0):** R$ {valores_numericos.sum():,.2f}")
+    
+    st.write("### 4️⃣ Verificar se existe a coluna")
+    st.write(f"- **Colunas disponíveis:** {df_pedidos.columns.tolist()}")
+
+st.divider()
+
 
 # ======================================================
 # 🔧 NORMALIZAÇÃO E LIMPEZA

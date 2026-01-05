@@ -56,6 +56,7 @@ if df.empty:
 # ======================================================
 df.columns = df.columns.str.strip()
 
+# Datas — manter datetime para lógica
 df["Primeiro Pedido"] = (
     pd.to_datetime(df["Primeiro Pedido"], errors="coerce", utc=True)
       .dt.tz_localize(None)
@@ -66,8 +67,9 @@ df["Último Pedido"] = (
       .dt.tz_localize(None)
 )
 
-
-df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
+df["Qtd Pedidos"] = pd.to_numeric(
+    df["Qtd Pedidos"], errors="coerce"
+).fillna(0)
 
 df["Valor Total"] = (
     df["Valor Total"]
@@ -78,7 +80,9 @@ df["Valor Total"] = (
     .str.replace(",", ".", regex=False)
 )
 
-df["Valor Total"] = pd.to_numeric(df["Valor Total"], errors="coerce").fillna(0)
+df["Valor Total"] = pd.to_numeric(
+    df["Valor Total"], errors="coerce"
+).fillna(0)
 
 df["Dias sem comprar"] = pd.to_numeric(
     df["Dias sem comprar"], errors="coerce"
@@ -99,13 +103,20 @@ c2.metric(
     f"R$ {faturamento:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 )
 
-c3.metric("🏆 Campeões", len(df[df["Classificação"].str.contains("Campeão", na=False)]))
-c4.metric("🚨 Em risco", len(df[df["Classificação"].str.contains("🚨", na=False)]))
+c3.metric(
+    "🏆 Campeões",
+    len(df[df["Classificação"].str.contains("Campeão", na=False)])
+)
+
+c4.metric(
+    "🚨 Em risco",
+    len(df[df["Classificação"].str.contains("🚨", na=False)])
+)
 
 st.divider()
 
 # ======================================================
-# 📋 TABELAS
+# 📋 CONFIG TABELAS
 # ======================================================
 COLUNAS = [
     "Cliente",
@@ -139,7 +150,20 @@ df_risco = df[
     ascending=[False, False]
 )
 
-st.dataframe(df_risco[COLUNAS], use_container_width=True, height=420)
+# 🔒 EXIBIÇÃO (converter datetime → string)
+df_risco_view = df_risco.copy()
+df_risco_view["Último Pedido"] = (
+    df_risco_view["Último Pedido"]
+    .dt.strftime("%d/%m/%Y %H:%M:%S")
+    .fillna("")
+)
+
+st.dataframe(
+    df_risco_view[COLUNAS],
+    use_container_width=True,
+    height=420
+)
+
 st.caption(f"{len(df_risco)} clientes em risco")
 st.divider()
 
@@ -164,7 +188,19 @@ df_ativa = df[
     ascending=[False, False]
 )
 
-st.dataframe(df_ativa[COLUNAS], use_container_width=True, height=420)
+df_ativa_view = df_ativa.copy()
+df_ativa_view["Último Pedido"] = (
+    df_ativa_view["Último Pedido"]
+    .dt.strftime("%d/%m/%Y %H:%M:%S")
+    .fillna("")
+)
+
+st.dataframe(
+    df_ativa_view[COLUNAS],
+    use_container_width=True,
+    height=420
+)
+
 st.caption(f"{len(df_ativa)} clientes ativos")
 st.divider()
 
@@ -188,5 +224,17 @@ df_dormentes = df[
     ascending=False
 )
 
-st.dataframe(df_dormentes[COLUNAS], use_container_width=True, height=420)
+df_dormentes_view = df_dormentes.copy()
+df_dormentes_view["Último Pedido"] = (
+    df_dormentes_view["Último Pedido"]
+    .dt.strftime("%d/%m/%Y %H:%M:%S")
+    .fillna("")
+)
+
+st.dataframe(
+    df_dormentes_view[COLUNAS],
+    use_container_width=True,
+    height=420
+)
+
 st.caption(f"{len(df_dormentes)} clientes dormentes")

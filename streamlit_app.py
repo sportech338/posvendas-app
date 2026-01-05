@@ -66,8 +66,9 @@ df_pedidos["Data de criação"] = (
     .dt.tz_localize(None)
 )
 
+
 # ======================================================
-# 🔑 CHAVE DO CLIENTE (EMAIL → CUSTOMER ID)
+# 🔑 CHAVE DO CLIENTE
 # ======================================================
 df_pedidos["cliente_key"] = (
     df_pedidos["Email"]
@@ -79,6 +80,7 @@ df_pedidos["cliente_key"] = (
 df_pedidos.loc[df_pedidos["cliente_key"] == "", "cliente_key"] = (
     "ID_" + df_pedidos["Customer ID"].astype(str)
 )
+
 
 # ======================================================
 # 🔢 GARANTE TIPOS
@@ -105,12 +107,12 @@ df = (
     .reset_index(drop=True)
 )
 
-# Padroniza nomes para o painel
 df = df.rename(columns={
     "Valor_Total": "Valor Total",
     "Primeiro_Pedido": "Primeiro Pedido",
     "Ultimo_Pedido": "Último Pedido",
 })
+
 
 # ======================================================
 # 📆 DIAS SEM COMPRAR
@@ -120,22 +122,31 @@ df["Dias sem comprar"] = (hoje - df["Último Pedido"]).dt.days
 
 
 # ======================================================
-# 🏷️ CLASSIFICAÇÃO (EXEMPLO — AJUSTE SEU CRITÉRIO)
+# 🏷️ NIVEL (força do cliente)
 # ======================================================
-def classificar(row):
-    if row["Dias sem comprar"] >= 90:
-        return "💤 Dormente"
-    if row["Dias sem comprar"] >= 45:
-        return "🚨 Em risco"
-    if row["Qtd_Pedidos"] >= 5:
+def calcular_nivel(qtd):
+    if qtd >= 5:
         return "Campeão"
-    if row["Qtd_Pedidos"] >= 3:
+    if qtd >= 3:
         return "Leal"
-    if row["Qtd_Pedidos"] >= 2:
+    if qtd >= 2:
         return "Promissor"
     return "Novo"
 
-df["Classificação"] = df.apply(classificar, axis=1)
+df["Nivel"] = df["Qtd_Pedidos"].apply(calcular_nivel)
+
+
+# ======================================================
+# 🚦 ESTADO (situação atual)
+# ======================================================
+def calcular_estado(dias):
+    if dias >= 90:
+        return "💤 Dormente"
+    if dias >= 45:
+        return "🚨 Em risco"
+    return "🟢 Ativo"
+
+df["Estado"] = df["Dias sem comprar"].apply(calcular_estado)
 
 
 # ======================================================
@@ -151,8 +162,8 @@ c2.metric(
     f"R$ {faturamento:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 )
 
-c3.metric("🏆 Campeões", len(df[df["Classificação"] == "Campeão"]))
-c4.metric("🚨 Em risco", len(df[df["Classificação"].str.contains("🚨", na=False)]))
+c3.metric("🏆 Campeões", len(df[df["Nivel"] == "Campeão"]))
+c4.metric("🚨 Em risco", len(df[df["Estado"] == "🚨 Em risco"]))
 
 st.divider()
 
@@ -163,14 +174,15 @@ st.divider()
 COLUNAS = [
     "Cliente",
     "Email",
-    "Classificação",
+    "Estado",
+    "Nivel",
     "Qtd_Pedidos",
     "Valor Total",
     "Último Pedido",
     "Dias sem comprar"
 ]
 
-NIVEIS = ["Campeão", "Leal", "Promissor", "Novo"]
+NIVEIS = ["Novo", "Promissor", "Leal", "Campeão"]
 
 
 # ======================================================
@@ -186,8 +198,8 @@ filtro_risco = st.multiselect(
 )
 
 df_risco = df[
-    df["Classificação"].str.contains("🚨", na=False) &
-    df["Classificação"].str.contains("|".join(filtro_risco), na=False)
+    (df["Estado"] == "🚨 Em risco") &
+    (df["Nivel"].isin(filtro_risco))
 ].sort_values(
     ["Dias sem comprar", "Valor Total"],
     ascending=[False, False]
@@ -211,9 +223,8 @@ filtro_ativa = st.multiselect(
 )
 
 df_ativa = df[
-    (~df["Classificação"].str.contains("🚨", na=False)) &
-    (~df["Classificação"].str.contains("💤", na=False)) &
-    (df["Classificação"].str.contains("|".join(filtro_ativa), na=False))
+    (df["Estado"] == "🟢 Ativo") &
+    (df["Nivel"].isin(filtro_ativa))
 ].sort_values(
     ["Valor Total", "Último Pedido"],
     ascending=[False, False]
@@ -237,8 +248,8 @@ filtro_dorm = st.multiselect(
 )
 
 df_dormentes = df[
-    df["Classificação"].str.contains("💤", na=False) &
-    df["Classificação"].str.contains("|".join(filtro_dorm), na=False)
+    (df["Estado"] == "💤 Dormente") &
+    (df["Nivel"].isin(filtro_dorm))
 ].sort_values(
     ["Dias sem comprar"],
     ascending=False

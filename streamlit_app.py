@@ -56,8 +56,27 @@ if df.empty:
 # ======================================================
 df.columns = df.columns.str.strip()
 
-df["Primeiro Pedido"] = pd.to_datetime(df["Primeiro Pedido"], errors="coerce")
-df["Último Pedido"] = pd.to_datetime(df["Último Pedido"], errors="coerce")
+df["Primeiro Pedido"] = pd.to_datetime(
+    df["Primeiro Pedido"].astype(str).str.strip(),
+    dayfirst=True,
+    errors="coerce"
+)
+
+df["Último Pedido"] = pd.to_datetime(
+    df["Último Pedido"].astype(str).str.strip(),
+    dayfirst=True,
+    errors="coerce"
+)
+
+invalidos = df[df["Último Pedido"].isna()]
+
+if not invalidos.empty:
+    st.warning("⚠️ Clientes com Último Pedido inválido")
+    st.dataframe(
+        invalidos[["Cliente", "Email", "Último Pedido"]],
+        use_container_width=True
+    )
+
 
 df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
 

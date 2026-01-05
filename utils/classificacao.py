@@ -30,7 +30,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     - Primeiro Pedido
     - Ultimo Pedido
     - Dias sem comprar
-    - Classificação (Novo/Promissor/Leal/Campeão)
+    - Nível (Novo/Promissor/Leal/Campeão)
     
     Raises:
         ValueError: Se colunas obrigatórias estiverem ausentes
@@ -108,9 +108,9 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     df_clientes["Dias sem comprar"] = df_clientes["Dias sem comprar"].clip(lower=0)
     
     # ======================================================
-    # 4. CLASSIFICAR CLIENTES
+    # 4. CLASSIFICAR CLIENTES (COLUNA "Nível")
     # ======================================================
-    df_clientes["Classificação"] = df_clientes.apply(
+    df_clientes["Nível"] = df_clientes.apply(
         _calcular_classificacao, 
         axis=1
     )
@@ -124,9 +124,25 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     )
     
     # ======================================================
-    # 6. REMOVER COLUNA AUXILIAR E RESETAR INDEX
+    # 6. REORDENAR COLUNAS (SEM "Estado" ainda)
     # ======================================================
-    df_clientes = df_clientes.drop(columns=["cliente_key"], errors="ignore")
+    colunas_ordenadas = [
+        "Customer ID",
+        "Cliente",
+        "Email",
+        "Qtd Pedidos",
+        "Valor Total",
+        "Primeiro Pedido",
+        "Ultimo Pedido",
+        "Dias sem comprar",
+        "Nível"
+    ]
+    
+    df_clientes = df_clientes[colunas_ordenadas]
+    
+    # ======================================================
+    # 7. RESETAR INDEX
+    # ======================================================
     df_clientes = df_clientes.reset_index(drop=True)
     
     return df_clientes
@@ -346,18 +362,18 @@ def filtrar_por_estado(
 
 
 # ======================================================
-# FILTRAR POR CLASSIFICAÇÃO
+# FILTRAR POR NÍVEL (ANTES ERA "CLASSIFICAÇÃO")
 # ======================================================
 def filtrar_por_classificacao(
     df_clientes: pd.DataFrame,
     classificacoes: List[str]
 ) -> pd.DataFrame:
     """
-    Filtra clientes por uma ou mais classificações.
+    Filtra clientes por uma ou mais níveis.
     
     Args:
         df_clientes: DataFrame com clientes
-        classificacoes: Lista de classificações, ex: ["Campeão", "Leal"]
+        classificacoes: Lista de níveis, ex: ["Campeão", "Leal"]
     
     Returns:
         pd.DataFrame: DataFrame filtrado
@@ -365,10 +381,10 @@ def filtrar_por_classificacao(
     Exemplo:
         >>> vips = filtrar_por_classificacao(df, ["Campeão", "Leal"])
     """
-    if "Classificação" not in df_clientes.columns:
-        raise ValueError("❌ Coluna 'Classificação' não encontrada!")
+    if "Nível" not in df_clientes.columns:
+        raise ValueError("❌ Coluna 'Nível' não encontrada!")
     
-    return df_clientes[df_clientes["Classificação"].isin(classificacoes)].copy()
+    return df_clientes[df_clientes["Nível"].isin(classificacoes)].copy()
 
 
 # ======================================================
@@ -418,8 +434,8 @@ def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> Dict:
     faturamento_total = float(df_clientes["Valor Total"].sum())
     ticket_medio = faturamento_total / total_clientes if total_clientes > 0 else 0.0
     
-    # Contar por classificação
-    contagem_classificacao = df_clientes["Classificação"].value_counts().to_dict()
+    # Contar por nível (agora é "Nível" ao invés de "Classificação")
+    contagem_nivel = df_clientes["Nível"].value_counts().to_dict()
     
     # Contar por estado (se coluna existir)
     if "Estado" in df_clientes.columns:
@@ -431,10 +447,10 @@ def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> Dict:
         "total_clientes": total_clientes,
         "faturamento_total": faturamento_total,
         "ticket_medio": ticket_medio,
-        "total_campeoes": contagem_classificacao.get("Campeão", 0),
-        "total_leais": contagem_classificacao.get("Leal", 0),
-        "total_promissores": contagem_classificacao.get("Promissor", 0),
-        "total_novos": contagem_classificacao.get("Novo", 0),
+        "total_campeoes": contagem_nivel.get("Campeão", 0),
+        "total_leais": contagem_nivel.get("Leal", 0),
+        "total_promissores": contagem_nivel.get("Promissor", 0),
+        "total_novos": contagem_nivel.get("Novo", 0),
         "total_ativos": contagem_estado.get("🟢 Ativo", 0),
         "total_em_risco": contagem_estado.get("🚨 Em risco", 0),
         "total_dormentes": contagem_estado.get("💤 Dormente", 0)

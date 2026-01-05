@@ -56,7 +56,7 @@ if df.empty:
 # ======================================================
 df.columns = df.columns.str.strip()
 
-# Datas — manter datetime para lógica
+# 🔒 Datas — manter datetime para lógica
 df["Primeiro Pedido"] = (
     pd.to_datetime(df["Primeiro Pedido"], errors="coerce", utc=True)
       .dt.tz_localize(None)
@@ -150,20 +150,14 @@ df_risco = df[
     ascending=[False, False]
 )
 
-# 🔒 EXIBIÇÃO (converter datetime → string)
 df_risco_view = df_risco.copy()
 df_risco_view["Último Pedido"] = (
     df_risco_view["Último Pedido"]
-    .dt.strftime("%d/%m/%Y %H:%M:%S")
-    .fillna("")
+    .astype(str)
+    .replace("NaT", "")
 )
 
-st.dataframe(
-    df_risco_view[COLUNAS],
-    use_container_width=True,
-    height=420
-)
-
+st.dataframe(df_risco_view[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_risco)} clientes em risco")
 st.divider()
 
@@ -191,16 +185,11 @@ df_ativa = df[
 df_ativa_view = df_ativa.copy()
 df_ativa_view["Último Pedido"] = (
     df_ativa_view["Último Pedido"]
-    .dt.strftime("%d/%m/%Y %H:%M:%S")
-    .fillna("")
+    .astype(str)
+    .replace("NaT", "")
 )
 
-st.dataframe(
-    df_ativa_view[COLUNAS],
-    use_container_width=True,
-    height=420
-)
-
+st.dataframe(df_ativa_view[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_ativa)} clientes ativos")
 st.divider()
 
@@ -227,14 +216,9 @@ df_dormentes = df[
 df_dormentes_view = df_dormentes.copy()
 df_dormentes_view["Último Pedido"] = (
     df_dormentes_view["Último Pedido"]
-    .dt.strftime("%d/%m/%Y %H:%M:%S")
-    .fillna("")
+    .astype(str)
+    .replace("NaT", "")
 )
 
-st.dataframe(
-    df_dormentes_view[COLUNAS],
-    use_container_width=True,
-    height=420
-)
-
+st.dataframe(df_dormentes_view[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_dormentes)} clientes dormentes")

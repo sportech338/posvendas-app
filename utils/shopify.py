@@ -3,7 +3,9 @@
 import requests
 import streamlit as st
 import time
-from typing import Generator, Dict, List
+import hmac
+import hashlib
+from typing import Generator, Dict, List, Optional
 
 
 # ======================================================
@@ -161,6 +163,256 @@ def puxar_pedidos_pagos_em_lotes(
 
 
 # ======================================================
+# BUSCAR PEDIDO INDIVIDUAL (PARA WEBHOOK)
+# ======================================================
+def buscar_pedido_por_id(pedido_id: str) -> Optional[Dict]:
+    """
+    Busca um pedido específico pelo ID na Shopify.
+    Útil para validar dados recebidos via webhook.
+    
+    Args:
+        pedido_id: ID do pedido (string ou int)
+    
+    Returns:
+        Dicionário com dados do pedido ou None se não encontrado
+    
+    Exemplo:
+        >>> pedido = buscar_pedido_por_id("123456789")
+        >>> print(pedido["Customer ID"])
+    """
+    try:
+        shop = st.secrets["shopify"]["shop_name"]
+        token = st.secrets["shopify"]["access_token"]
+        version = st.secrets["shopify"]["API_VERSION"]
+    except KeyError as e:
+        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    
+    url = f"https://{shop}/admin/api/{version}/orders/{pedido_id}.json"
+    
+    headers = {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code == 404:
+            return None
+        
+        response.raise_for_status()
+        
+        order = response.json().get("order", {})
+        
+        if not order:
+            return None
+        
+        # Formatar pedido no mesmo padrão de puxar_pedidos_pagos_em_lotes
+        customer = order.get("customer") or {}
+        shipping = order.get("shipping_address") or {}
+        
+        return {
+            "Pedido ID": str(order.get("id", "")),
+            "Data de criação": order.get("created_at"),
+            "Customer ID": str(customer.get("id", "")),
+            "Cliente": _extrair_nome_cliente(customer, shipping),
+            "Email": order.get("email") or "",
+            "Valor Total": float(order.get("total_price", 0)),
+            "Pedido": order.get("order_number"),
+            "Financial Status": order.get("financial_status"),
+            "Cancelled At": order.get("cancelled_at"),
+            "Total Refunded": float(order.get("total_refunded", 0))
+        }
+        
+    except requests.exceptions.RequestException as e:
+        raise ConnectionError(f"❌ Erro ao buscar pedido: {str(e)}")
+
+
+# ======================================================
+# VALIDAR WEBHOOK DA SHOPIFY
+# ======================================================
+def validar_webhook_shopify(data: bytes, hmac_header: str, secret: str) -> bool:
+    """
+    Valida se um webhook veio realmente da Shopify usando HMAC SHA256.
+    
+    Args:
+        data: Corpo da requisição (bytes)
+        hmac_header: Header "X-Shopify-Hmac-Sha256" enviado pela Shopify
+        secret: Seu Shopify Webhook Secret (configurado no .env)
+    
+    Returns:
+        True se webhook é válido, False caso contrário
+    
+    Exemplo:
+        >>> from flask import request
+        >>> if validar_webhook_shopify(request.data, request.headers.get("X-Shopify-Hmac-Sha256"), SECRET):
+        >>>     processar_webhook()
+    """
+    if not secret:
+        print("⚠️ SHOPIFY_WEBHOOK_SECRET não configurado!")
+        return False
+    
+    # Calcular hash
+    hash_calculado = hmac.new(
+        secret.encode('utf-8'),
+        data,
+        hashlib.sha256
+    ).hexdigest()
+    
+    # Comparar com o hash enviado pela Shopify
+    return hmac.compare_digest(hash_calculado, hmac_header)
+
+
+# ======================================================
+# CRIAR WEBHOOK NA SHOPIFY (PROGRAMÁTICO)
+# ======================================================
+def criar_webhook(topico: str, url_callback: str) -> Optional[Dict]:
+    """
+    Cria um webhook na Shopify programaticamente.
+    
+    Args:
+        topico: Evento a monitorar (ex: "orders/paid", "orders/create")
+        url_callback: URL pública do seu servidor que receberá o webhook
+    
+    Returns:
+        Dados do webhook criado ou None se falhar
+    
+    Tópicos disponíveis:
+    - orders/paid (pedido pago)
+    - orders/create (pedido criado)
+    - orders/updated (pedido atualizado)
+    - orders/cancelled (pedido cancelado)
+    
+    Exemplo:
+        >>> webhook = criar_webhook(
+        >>>     topico="orders/paid",
+        >>>     url_callback="https://seu-dominio.com/webhooks/orders/paid"
+        >>> )
+        >>> print(f"Webhook ID: {webhook['id']}")
+    """
+    try:
+        shop = st.secrets["shopify"]["shop_name"]
+        token = st.secrets["shopify"]["access_token"]
+        version = st.secrets["shopify"]["API_VERSION"]
+    except KeyError as e:
+        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    
+    url = f"https://{shop}/admin/api/{version}/webhooks.json"
+    
+    headers = {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "webhook": {
+            "topic": topico,
+            "address": url_callback,
+            "format": "json"
+        }
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=10)
+        response.raise_for_status()
+        
+        webhook = response.json().get("webhook", {})
+        
+        print(f"✅ Webhook criado com sucesso!")
+        print(f"   • ID: {webhook.get('id')}")
+        print(f"   • Tópico: {webhook.get('topic')}")
+        print(f"   • URL: {webhook.get('address')}")
+        
+        return webhook
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erro ao criar webhook: {str(e)}")
+        return None
+
+
+# ======================================================
+# LISTAR WEBHOOKS EXISTENTES
+# ======================================================
+def listar_webhooks() -> List[Dict]:
+    """
+    Lista todos os webhooks configurados na Shopify.
+    
+    Returns:
+        Lista de webhooks ativos
+    
+    Exemplo:
+        >>> webhooks = listar_webhooks()
+        >>> for w in webhooks:
+        >>>     print(f"{w['topic']} → {w['address']}")
+    """
+    try:
+        shop = st.secrets["shopify"]["shop_name"]
+        token = st.secrets["shopify"]["access_token"]
+        version = st.secrets["shopify"]["API_VERSION"]
+    except KeyError as e:
+        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    
+    url = f"https://{shop}/admin/api/{version}/webhooks.json"
+    
+    headers = {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        return response.json().get("webhooks", [])
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erro ao listar webhooks: {str(e)}")
+        return []
+
+
+# ======================================================
+# DELETAR WEBHOOK
+# ======================================================
+def deletar_webhook(webhook_id: int) -> bool:
+    """
+    Deleta um webhook específico da Shopify.
+    
+    Args:
+        webhook_id: ID do webhook a deletar
+    
+    Returns:
+        True se deletado com sucesso, False caso contrário
+    
+    Exemplo:
+        >>> deletar_webhook(123456789)
+    """
+    try:
+        shop = st.secrets["shopify"]["shop_name"]
+        token = st.secrets["shopify"]["access_token"]
+        version = st.secrets["shopify"]["API_VERSION"]
+    except KeyError as e:
+        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    
+    url = f"https://{shop}/admin/api/{version}/webhooks/{webhook_id}.json"
+    
+    headers = {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json"
+    }
+    
+    try:
+        response = requests.delete(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        print(f"✅ Webhook {webhook_id} deletado com sucesso!")
+        return True
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erro ao deletar webhook: {str(e)}")
+        return False
+
+
+# ======================================================
 # FUNÇÕES AUXILIARES
 # ======================================================
 def _extrair_nome_cliente(customer: dict, shipping: dict = None) -> str:
@@ -180,7 +432,6 @@ def _extrair_nome_cliente(customer: dict, shipping: dict = None) -> str:
 
     nome_completo = f"{first} {last}".strip()
     return nome_completo if nome_completo else "SEM NOME"
-
 
 
 def _extrair_proxima_pagina(link_header: str) -> str:

@@ -58,26 +58,10 @@ if df_pedidos.empty:
 # ======================================================
 # 🔧 NORMALIZAÇÃO E LIMPEZA
 # ======================================================
-# Limpar nomes das colunas
 df_pedidos.columns = df_pedidos.columns.str.strip()
 
-# ✅ CONVERTER VALOR TOTAL (REMOVER FORMATAÇÃO BRASILEIRA)
-if "Valor Total" in df_pedidos.columns:
-    df_pedidos["Valor Total"] = (
-        df_pedidos["Valor Total"]
-        .astype(str)
-        .str.replace("R$", "", regex=False)   # Remove R$
-        .str.replace(" ", "", regex=False)     # Remove espaços
-        .str.replace(".", "", regex=False)     # Remove separador de milhar (1.234 → 1234)
-        .str.replace(",", ".", regex=False)    # Converte vírgula decimal para ponto (96,90 → 96.90)
-        .str.strip()
-    )
-    
-    # Agora converte para número
-    df_pedidos["Valor Total"] = pd.to_numeric(
-        df_pedidos["Valor Total"], 
-        errors="coerce"
-    ).fillna(0)
+# ✅ Valores já convertidos automaticamente por ler_aba() em utils/sheets.py
+# Não precisa mais fazer conversão manual aqui!
 
 # Normalizar datas
 df_pedidos["Data de criação"] = (
@@ -88,40 +72,30 @@ df_pedidos["Data de criação"] = (
 
 
 # ======================================================
-# 🔍 DEBUG (OPCIONAL - PODE REMOVER DEPOIS)
+# 🔑 CHAVE DO CLIENTE (MELHORADO: USA CUSTOMER ID)
 # ======================================================
-with st.expander("🔍 DEBUG - Verificar conversão de valores", expanded=False):
-    st.write("**Após limpeza e conversão:**")
-    st.write(f"- Tipo da coluna: `{df_pedidos['Valor Total'].dtype}`")
-    st.write(f"- Primeiros 10 valores: {df_pedidos['Valor Total'].head(10).tolist()}")
-    st.write(f"- Soma total: R$ {df_pedidos['Valor Total'].sum():,.2f}")
-    st.write(f"- Valores zerados: {(df_pedidos['Valor Total'] == 0).sum()}")
-
-st.divider()
-
-
-# ======================================================
-# 🔑 CHAVE DO CLIENTE
-# ======================================================
+# ✅ Customer ID é único por cliente na Shopify
+# ✅ Email pode mudar, mas Customer ID permanece o mesmo
 df_pedidos["cliente_key"] = (
-    df_pedidos["Email"]
+    df_pedidos["Customer ID"]
     .astype(str)
-    .str.lower()
     .str.strip()
 )
 
+# Fallback para clientes sem Customer ID (casos raros)
 df_pedidos.loc[df_pedidos["cliente_key"] == "", "cliente_key"] = (
-    "ID_" + df_pedidos["Customer ID"].astype(str)
+    "EMAIL_" + df_pedidos["Email"].astype(str).str.lower().str.strip()
 )
 
 
 # ======================================================
-# 🧮 RECÁLCULO DAS MÉTRICAS DE CLIENTES
+# 🧮 AGREGAÇÃO DE CLIENTES
 # ======================================================
 df = (
     df_pedidos
     .groupby("cliente_key", as_index=False)
     .agg(
+        Customer_ID=("Customer ID", "first"),
         Cliente=("Cliente", "last"),
         Email=("Email", "last"),
         Qtd_Pedidos=("Pedido ID", "count"),
@@ -131,7 +105,6 @@ df = (
     )
 )
 
-# Renomear colunas para padronizar
 df = df.rename(columns={
     "Valor_Total": "Valor Total",
     "Primeiro_Pedido": "Primeiro Pedido",
@@ -147,24 +120,97 @@ df["Dias sem comprar"] = (hoje - df["Último Pedido"]).dt.days
 
 
 # ======================================================
-# 🏷️ NIVEL (força do cliente)
+# 📊 ANÁLISE DE CICLO DE COMPRA (VALIDAÇÃO DE THRESHOLDS)
 # ======================================================
-def calcular_nivel(qtd):
-    if qtd >= 5:
+with st.expander("📊 Análise de Ciclo de Compra - Ajustar Thresholds", expanded=False):
+    st.write("### Validação dos critérios de classificação")
+    
+    # Calcular ciclo médio para clientes recorrentes
+    clientes_recorrentes = df[df["Qtd_Pedidos"] >= 2].copy()
+    
+    if len(clientes_recorrentes) >= 5:  # Mínimo de 5 clientes para análise
+        clientes_recorrentes["Dias_Total"] = (
+            clientes_recorrentes["Último Pedido"] - 
+            clientes_recorrentes["Primeiro Pedido"]
+        ).dt.days
+        
+        clientes_recorrentes["Ciclo_Medio"] = (
+            clientes_recorrentes["Dias_Total"] / 
+            (clientes_recorrentes["Qtd_Pedidos"] - 1)
+        )
+        
+        ciclo_mediana = clientes_recorrentes["Ciclo_Medio"].median()
+        ciclo_media = clientes_recorrentes["Ciclo_Medio"].mean()
+        
+        st.metric("📅 Ciclo médio de compra (mediana)", f"{ciclo_mediana:.0f} dias")
+        st.caption(f"Média: {ciclo_media:.0f} dias")
+        
+        st.write("**💡 Thresholds sugeridos baseados nos seus dados:**")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.success(f"**🟢 Ativo**\n\nAté {ciclo_mediana * 1.5:.0f} dias")
+        
+        with col2:
+            st.warning(f"**🚨 Em Risco**\n\n{ciclo_mediana * 1.5:.0f} - {ciclo_mediana * 3:.0f} dias")
+        
+        with col3:
+            st.error(f"**💤 Dormente**\n\nMais de {ciclo_mediana * 3:.0f} dias")
+        
+        st.info(
+            f"📌 **Atualmente usando:** Ativo < 45 dias | Em Risco 45-90 dias | Dormente > 90 dias\n\n"
+            f"Ajuste os valores na função `calcular_estado()` baseado na análise acima."
+        )
+    else:
+        st.warning("⚠️ Poucos clientes recorrentes para análise estatística (mínimo: 5)")
+        st.info("Os thresholds atuais (45/90 dias) são estimativas genéricas. Ajuste conforme seu negócio crescer.")
+
+st.divider()
+
+
+# ======================================================
+# 🏷️ NIVEL (MELHORADO: considera valor + recência)
+# ======================================================
+def calcular_nivel(row):
+    """
+    Classifica cliente baseado em RFM (Recency, Frequency, Monetary)
+    Alinhado com modelo de Escada de Valor do pós-vendas
+    """
+    qtd = row["Qtd_Pedidos"]
+    valor = row["Valor Total"]
+    dias = row["Dias sem comprar"]
+    
+    # 🏆 Campeão: Alto valor + frequência + comprou recentemente
+    if (qtd >= 5 or valor >= 5000) and dias < 60:
         return "Campeão"
-    if qtd >= 3:
+    
+    # 💙 Leal: Compra regularmente com bom valor
+    if (qtd >= 3 or valor >= 2000) and dias < 90:
         return "Leal"
-    if qtd >= 2:
+    
+    # ⭐ Promissor: Mostra potencial (2+ compras ou ticket alto)
+    if (qtd >= 2 or valor >= 500) and dias < 120:
         return "Promissor"
+    
+    # 🆕 Novo: Primeira compra recente
+    if qtd == 1 and dias < 90:
+        return "Novo"
+    
+    # Fallback: classificar como Novo
     return "Novo"
 
-df["Nivel"] = df["Qtd_Pedidos"].apply(calcular_nivel)
+df["Nivel"] = df.apply(calcular_nivel, axis=1)
 
 
 # ======================================================
 # 🚦 ESTADO (situação atual)
 # ======================================================
 def calcular_estado(dias):
+    """
+    Classificação temporal baseada em dias desde última compra
+    TODO: Ajustar thresholds baseado na análise de ciclo de compra
+    """
     if dias >= 90:
         return "💤 Dormente"
     if dias >= 45:
@@ -230,7 +276,6 @@ df_ativa = df[
     ascending=[False, False]
 )
 
-# Formatar valor para exibição
 df_ativa_display = df_ativa[COLUNAS].copy()
 df_ativa_display["Valor Total"] = df_ativa_display["Valor Total"].apply(
     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -261,7 +306,6 @@ df_risco = df[
     ascending=[False, False]
 )
 
-# Formatar valor para exibição
 df_risco_display = df_risco[COLUNAS].copy()
 df_risco_display["Valor Total"] = df_risco_display["Valor Total"].apply(
     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -292,7 +336,6 @@ df_dormentes = df[
     ascending=False
 )
 
-# Formatar valor para exibição
 df_dormentes_display = df_dormentes[COLUNAS].copy()
 df_dormentes_display["Valor Total"] = df_dormentes_display["Valor Total"].apply(
     lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")

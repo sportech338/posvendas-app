@@ -100,6 +100,24 @@ def sincronizar_shopify_completo(
     )
     
     # ==================================================
+    # ETAPA 5.1: REORDENAR COLUNAS NA ORDEM FINAL
+    # ==================================================
+    colunas_finais = [
+        "Customer ID",
+        "Cliente",
+        "Email",
+        "Qtd Pedidos",
+        "Valor Total",
+        "Primeiro Pedido",
+        "Ultimo Pedido",
+        "Dias sem comprar",
+        "Estado",
+        "Nível"
+    ]
+    
+    df_clientes = df_clientes[colunas_finais]
+    
+    # ==================================================
     # ETAPA 6: SOBRESCREVER ABA "Clientes Shopify"
     # ==================================================
     try:
@@ -115,12 +133,12 @@ def sincronizar_shopify_completo(
         }
     
     # ==================================================
-    # ESTATÍSTICAS FINAIS
+    # ESTATÍSTICAS FINAIS (AGORA USA "Nível")
     # ==================================================
-    total_campeoes = len(df_clientes[df_clientes["Classificação"] == "Campeão"])
-    total_leais = len(df_clientes[df_clientes["Classificação"] == "Leal"])
-    total_promissores = len(df_clientes[df_clientes["Classificação"] == "Promissor"])
-    total_novos = len(df_clientes[df_clientes["Classificação"] == "Novo"])
+    total_campeoes = len(df_clientes[df_clientes["Nível"] == "Campeão"])
+    total_leais = len(df_clientes[df_clientes["Nível"] == "Leal"])
+    total_promissores = len(df_clientes[df_clientes["Nível"] == "Promissor"])
+    total_novos = len(df_clientes[df_clientes["Nível"] == "Novo"])
     
     total_ativos = len(df_clientes[df_clientes["Estado"] == "🟢 Ativo"])
     total_risco = len(df_clientes[df_clientes["Estado"] == "🚨 Em risco"])
@@ -132,7 +150,7 @@ def sincronizar_shopify_completo(
             f"{resultado_pedidos['mensagem']}\n\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"👥 **Total de clientes:** {len(df_clientes)}\n\n"
-            "**📊 Por Classificação:**\n"
+            "**📊 Por Nível:**\n"
             f"  🏆 Campeões: {total_campeoes}\n"
             f"  💙 Leais: {total_leais}\n"
             f"  ⭐ Promissores: {total_promissores}\n"

@@ -32,6 +32,22 @@ ABA_PEDIDOS = "Pedidos Shopify"
 
 
 # ======================================================
+# 📦 CARREGAMENTO DOS CLIENTES (JÁ AGREGADOS)
+# ======================================================
+@st.cache_data(ttl=300)
+def carregar_clientes():
+    """
+    Carrega dados JÁ AGREGADOS da aba 'Clientes Shopify'.
+    
+    Não precisa processar pedidos individualmente, pois a sincronização
+    já fez a agregação e salvou na planilha.
+    
+    TTL: 5 minutos (300 segundos)
+    """
+    return ler_aba(PLANILHA, ABA_CLIENTES)
+
+
+# ======================================================
 # 🔄 SINCRONIZAÇÃO SHOPIFY
 # ======================================================
 st.subheader("🔄 Sincronização com Shopify")
@@ -55,8 +71,9 @@ with col_sync2:
                 
                 if resultado["status"] == "success":
                     st.success(resultado["mensagem"])
-                    # Limpar cache específico
+                    # Limpar cache específico (AGORA A FUNÇÃO JÁ EXISTE!)
                     carregar_clientes.clear()
+                    st.rerun()  # Recarregar app automaticamente
                 elif resultado["status"] == "warning":
                     st.warning(resultado["mensagem"])
                 else:
@@ -66,22 +83,6 @@ with col_sync2:
                 st.error(f"❌ Erro na sincronização: {str(e)}")
 
 st.divider()
-
-
-# ======================================================
-# 📦 CARREGAMENTO DOS CLIENTES (JÁ AGREGADOS)
-# ======================================================
-@st.cache_data(ttl=300)
-def carregar_clientes():
-    """
-    Carrega dados JÁ AGREGADOS da aba 'Clientes Shopify'.
-    
-    Não precisa processar pedidos individualmente, pois a sincronização
-    já fez a agregação e salvou na planilha.
-    
-    TTL: 5 minutos (300 segundos)
-    """
-    return ler_aba(PLANILHA, ABA_CLIENTES)
 
 
 # ======================================================

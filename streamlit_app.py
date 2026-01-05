@@ -56,16 +56,28 @@ if df_pedidos.empty:
 
 
 # ======================================================
-# 🔧 NORMALIZAÇÃO DE DATAS (ISO SHOPIFY)
+# 🔧 NORMALIZAÇÃO E LIMPEZA
 # ======================================================
+# Limpar nomes das colunas
 df_pedidos.columns = df_pedidos.columns.str.strip()
 
+# 🔢 CONVERTER VALOR TOTAL PRIMEIRO (ANTES DE QUALQUER AGRUPAMENTO)
+df_pedidos["Valor Total"] = pd.to_numeric(
+    df_pedidos["Valor Total"], errors="coerce"
+).fillna(0)
+
+# Normalizar datas
 df_pedidos["Data de criação"] = (
     pd.to_datetime(df_pedidos["Data de criação"], errors="coerce", utc=True)
     .dt.tz_convert("America/Sao_Paulo")
     .dt.tz_localize(None)
 )
 
+# 🔍 DEBUG: Verificar valores antes do agrupamento
+st.write("DEBUG - Primeiras linhas de pedidos:")
+st.write(df_pedidos[["Cliente", "Email", "Valor Total"]].head())
+st.write(f"Total de pedidos carregados: {len(df_pedidos)}")
+st.write(f"Soma total antes do agrupamento: R$ {df_pedidos['Valor Total'].sum():,.2f}")
 
 # ======================================================
 # 🔑 CHAVE DO CLIENTE
@@ -83,30 +95,22 @@ df_pedidos.loc[df_pedidos["cliente_key"] == "", "cliente_key"] = (
 
 
 # ======================================================
-# 🔢 GARANTE TIPOS
-# ======================================================
-df_pedidos["Valor Total"] = pd.to_numeric(
-    df_pedidos["Valor Total"], errors="coerce"
-).fillna(0)
-
-
-# ======================================================
 # 🧮 RECÁLCULO DAS MÉTRICAS DE CLIENTES
 # ======================================================
 df = (
     df_pedidos
-    .groupby("cliente_key")
+    .groupby("cliente_key", as_index=False)
     .agg(
         Cliente=("Cliente", "last"),
         Email=("Email", "last"),
         Qtd_Pedidos=("Pedido ID", "count"),
-        Valor_Total=("Valor Total", "sum"),
+        Valor_Total=("Valor Total", "sum"),  # Soma dos valores
         Primeiro_Pedido=("Data de criação", "min"),
         Ultimo_Pedido=("Data de criação", "max"),
     )
-    .reset_index(drop=True)
 )
 
+# Renomear coluna para padronizar
 df = df.rename(columns={
     "Valor_Total": "Valor Total",
     "Primeiro_Pedido": "Primeiro Pedido",
@@ -169,7 +173,7 @@ st.divider()
 
 
 # ======================================================
-# 📋 TABELAS
+# 📋 CONFIGURAÇÃO DAS TABELAS
 # ======================================================
 COLUNAS = [
     "Cliente",
@@ -205,7 +209,13 @@ df_ativa = df[
     ascending=[False, False]
 )
 
-st.dataframe(df_ativa[COLUNAS], use_container_width=True, height=420)
+# Formatar valor para exibição
+df_ativa_display = df_ativa[COLUNAS].copy()
+df_ativa_display["Valor Total"] = df_ativa_display["Valor Total"].apply(
+    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+)
+
+st.dataframe(df_ativa_display, use_container_width=True, height=420)
 st.caption(f"{len(df_ativa)} clientes ativos")
 st.divider()
 
@@ -230,9 +240,16 @@ df_risco = df[
     ascending=[False, False]
 )
 
-st.dataframe(df_risco[COLUNAS], use_container_width=True, height=420)
+# Formatar valor para exibição
+df_risco_display = df_risco[COLUNAS].copy()
+df_risco_display["Valor Total"] = df_risco_display["Valor Total"].apply(
+    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+)
+
+st.dataframe(df_risco_display, use_container_width=True, height=420)
 st.caption(f"{len(df_risco)} clientes em risco")
 st.divider()
+
 
 # ======================================================
 # 💤 DORMENTES
@@ -254,5 +271,11 @@ df_dormentes = df[
     ascending=False
 )
 
-st.dataframe(df_dormentes[COLUNAS], use_container_width=True, height=420)
+# Formatar valor para exibição
+df_dormentes_display = df_dormentes[COLUNAS].copy()
+df_dormentes_display["Valor Total"] = df_dormentes_display["Valor Total"].apply(
+    lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+)
+
+st.dataframe(df_dormentes_display, use_container_width=True, height=420)
 st.caption(f"{len(df_dormentes)} clientes dormentes")

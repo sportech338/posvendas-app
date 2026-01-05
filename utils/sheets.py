@@ -75,23 +75,6 @@ def _normalizar_id(valor) -> str:
     )
 
 
-def _normalizar_valores_ptbr(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Converte valores monetários para padrão pt-BR
-    (96.9 -> 96,9) antes de enviar ao Google Sheets
-    """
-    df = df.copy()
-
-    if "Valor Total" in df.columns:
-        df["Valor Total"] = (
-            df["Valor Total"]
-            .astype(str)
-            .str.replace(".", ",", regex=False)
-        )
-
-    return df
-
-
 def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
     """
     Lê apenas a coluna de IDs para deduplicação
@@ -117,6 +100,7 @@ def ler_ids_existentes(planilha: str, aba: str, coluna_id: str) -> set:
 def append_aba(planilha: str, aba: str, df: pd.DataFrame):
     """
     Adiciona linhas no final da aba SEM apagar o conteúdo existente
+    ✅ MANTÉM VALORES NUMÉRICOS COMO NÚMEROS
     """
     if df.empty:
         return
@@ -129,12 +113,26 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
         ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
         ws.append_row(df.columns.tolist())
 
-    # ✅ Normaliza valores monetários pt-BR
-    df = _normalizar_valores_ptbr(df)
+    # ✅ CONVERTE PARA LISTA PRESERVANDO TIPOS
+    # Números ficam como números, strings como strings
+    valores = []
+    for _, row in df.iterrows():
+        linha = []
+        for val in row:
+            # Se for número, manda como número
+            if pd.notna(val) and isinstance(val, (int, float)):
+                linha.append(val)
+            # Se for NaN/None, manda string vazia
+            elif pd.isna(val):
+                linha.append("")
+            # Resto como string
+            else:
+                linha.append(str(val))
+        valores.append(linha)
 
     ws.append_rows(
-        df.astype(str).values.tolist(),
-        value_input_option="USER_ENTERED"
+        valores,
+        value_input_option="USER_ENTERED"  # Deixa Sheets interpretar tipos
     )
 
 
@@ -144,6 +142,7 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
 def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
     """
     SOBRESCREVE a aba inteira
+    ✅ MANTÉM VALORES NUMÉRICOS COMO NÚMEROS
     """
     sh = abrir_planilha(planilha)
 
@@ -153,8 +152,21 @@ def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
         ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
 
     ws.clear()
+    
+    # ✅ CONVERTE PARA LISTA PRESERVANDO TIPOS
+    valores = [df.columns.tolist()]
+    for _, row in df.iterrows():
+        linha = []
+        for val in row:
+            if pd.notna(val) and isinstance(val, (int, float)):
+                linha.append(val)
+            elif pd.isna(val):
+                linha.append("")
+            else:
+                linha.append(str(val))
+        valores.append(linha)
+    
     ws.update(
-        [df.columns.tolist()] +
-        df.astype(str).values.tolist(),
+        valores,
         value_input_option="USER_ENTERED"
     )

@@ -186,31 +186,6 @@ NIVEIS = ["Novo", "Promissor", "Leal", "Campeão"]
 
 
 # ======================================================
-# 🚨 EM RISCO
-# ======================================================
-st.subheader("🚨 Em risco — ação imediata")
-
-filtro_risco = st.multiselect(
-    "Filtrar Em risco por nível",
-    NIVEIS,
-    default=NIVEIS,
-    key="risco"
-)
-
-df_risco = df[
-    (df["Estado"] == "🚨 Em risco") &
-    (df["Nivel"].isin(filtro_risco))
-].sort_values(
-    ["Dias sem comprar", "Valor Total"],
-    ascending=[False, False]
-)
-
-st.dataframe(df_risco[COLUNAS], use_container_width=True, height=420)
-st.caption(f"{len(df_risco)} clientes em risco")
-st.divider()
-
-
-# ======================================================
 # 🟢 BASE ATIVA
 # ======================================================
 st.subheader("🟢 Base ativa")
@@ -234,6 +209,30 @@ st.dataframe(df_ativa[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_ativa)} clientes ativos")
 st.divider()
 
+
+# ======================================================
+# 🚨 EM RISCO
+# ======================================================
+st.subheader("🚨 Em risco — ação imediata")
+
+filtro_risco = st.multiselect(
+    "Filtrar Em risco por nível",
+    NIVEIS,
+    default=NIVEIS,
+    key="risco"
+)
+
+df_risco = df[
+    (df["Estado"] == "🚨 Em risco") &
+    (df["Nivel"].isin(filtro_risco))
+].sort_values(
+    ["Dias sem comprar", "Valor Total"],
+    ascending=[False, False]
+)
+
+st.dataframe(df_risco[COLUNAS], use_container_width=True, height=420)
+st.caption(f"{len(df_risco)} clientes em risco")
+st.divider()
 
 # ======================================================
 # 💤 DORMENTES

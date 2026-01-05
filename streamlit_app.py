@@ -6,6 +6,7 @@ import pandas as pd
 from utils.sync import sincronizar_shopify_com_planilha
 from utils.sheets import ler_aba
 
+
 # ======================================================
 # CONFIGURAÇÃO GERAL
 # ======================================================
@@ -20,6 +21,7 @@ st.divider()
 
 PLANILHA = "Clientes Shopify"
 ABA_CLIENTES = "Clientes Shopify"
+
 
 # ======================================================
 # 🔄 SINCRONIZAÇÃO SHOPIFY
@@ -38,6 +40,7 @@ if st.button("🔄 Atualizar pedidos pagos"):
 
 st.divider()
 
+
 # ======================================================
 # 📊 CARREGAMENTO DOS CLIENTES
 # ======================================================
@@ -51,23 +54,40 @@ if df.empty:
     st.warning("Nenhum cliente encontrado na aba Clientes Shopify.")
     st.stop()
 
+
+# ======================================================
+# 🔧 FUNÇÃO ÚNICA DE PARSE DE DATAS (BLINDADA)
+# ======================================================
+def parse_datetime(col: pd.Series) -> pd.Series:
+    col = col.astype(str).str.strip()
+
+    # 1️⃣ tenta pt-BR (DD/MM/YYYY HH:MM:SS)
+    dt = pd.to_datetime(col, dayfirst=True, errors="coerce")
+
+    # 2️⃣ fallback ISO Shopify (com timezone)
+    mask = dt.isna()
+    if mask.any():
+        dt.loc[mask] = (
+            pd.to_datetime(col.loc[mask], errors="coerce", utc=True)
+            .dt.tz_convert("America/Sao_Paulo")
+            .dt.tz_localize(None)
+        )
+
+    return dt
+
+
 # ======================================================
 # NORMALIZAÇÃO
 # ======================================================
 df.columns = df.columns.str.strip()
 
-df["Primeiro Pedido"] = pd.to_datetime(
-    df["Primeiro Pedido"].astype(str).str.strip(),
-    dayfirst=True,
-    errors="coerce"
-)
+df["Primeiro Pedido"] = parse_datetime(df["Primeiro Pedido"])
+df["Último Pedido"] = parse_datetime(df["Último Pedido"])
 
-df["Último Pedido"] = pd.to_datetime(
-    df["Último Pedido"].astype(str).str.strip(),
-    dayfirst=True,
-    errors="coerce"
-)
 
+# ======================================================
+# 🔍 LOG DE DATAS INVÁLIDAS
+# ======================================================
 invalidos = df[df["Último Pedido"].isna()]
 
 if not invalidos.empty:
@@ -78,6 +98,9 @@ if not invalidos.empty:
     )
 
 
+# ======================================================
+# OUTRAS NORMALIZAÇÕES
+# ======================================================
 df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
 
 df["Valor Total"] = (
@@ -97,6 +120,7 @@ df["Dias sem comprar"] = pd.to_numeric(
 
 df["Classificação"] = df["Classificação"].astype(str)
 
+
 # ======================================================
 # 📈 MÉTRICAS TOPO
 # ======================================================
@@ -115,6 +139,7 @@ c4.metric("🚨 Em risco", len(df[df["Classificação"].str.contains("🚨", na=
 
 st.divider()
 
+
 # ======================================================
 # 📋 TABELAS
 # ======================================================
@@ -129,6 +154,7 @@ COLUNAS = [
 ]
 
 NIVEIS = ["Campeão", "Leal", "Promissor", "Novo"]
+
 
 # ======================================================
 # 🚨 EM RISCO
@@ -154,6 +180,7 @@ st.dataframe(df_risco[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_risco)} clientes em risco")
 st.divider()
 
+
 # ======================================================
 # 🟢 BASE ATIVA
 # ======================================================
@@ -178,6 +205,7 @@ df_ativa = df[
 st.dataframe(df_ativa[COLUNAS], use_container_width=True, height=420)
 st.caption(f"{len(df_ativa)} clientes ativos")
 st.divider()
+
 
 # ======================================================
 # 💤 DORMENTES

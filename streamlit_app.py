@@ -73,12 +73,6 @@ df_pedidos["Data de criação"] = (
     .dt.tz_localize(None)
 )
 
-# 🔍 DEBUG: Verificar valores antes do agrupamento
-st.write("DEBUG - Primeiras linhas de pedidos:")
-st.write(df_pedidos[["Cliente", "Email", "Valor Total"]].head())
-st.write(f"Total de pedidos carregados: {len(df_pedidos)}")
-st.write(f"Soma total antes do agrupamento: R$ {df_pedidos['Valor Total'].sum():,.2f}")
-
 # ======================================================
 # 🔑 CHAVE DO CLIENTE
 # ======================================================

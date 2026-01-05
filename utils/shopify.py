@@ -13,9 +13,16 @@ def puxar_pedidos_pagos_em_lotes(
     Busca TODOS os pedidos pagos da Shopify a partir de uma data
     e retorna os dados em lotes (ex: 500 em 500).
 
-    - Usa paginação oficial da Shopify (Link header)
-    - Respeita rate limit da Shopify (429)
-    - Trata pedidos sem customer (guest / importados)
+    🔒 IMPORTANTE:
+    - Datas retornadas são ISO 8601 (Shopify padrão)
+    - Timezone é preservado
+    - NÃO converte datas
+    - NÃO formata para pt-BR
+
+    Exemplo:
+    2025-09-13T09:22:08-03:00
+
+    A conversão é responsabilidade da camada de visualização.
     """
 
     # =========================
@@ -66,17 +73,15 @@ def puxar_pedidos_pagos_em_lotes(
 
         orders = response.json().get("orders", [])
 
-        # Se não vier pedido nenhum, encerra
         if not orders:
             break
 
         for o in orders:
-            # 🔒 Customer pode ser None
             customer = o.get("customer") or {}
 
             buffer.append({
                 "Pedido ID": str(o.get("id")),
-                "Data de criação": o.get("created_at"),
+                "Data de criação": o.get("created_at"),  # ISO 8601
                 "Customer ID": str(customer.get("id", "")),
                 "Cliente": (
                     f"{customer.get('first_name', '')} "
@@ -90,21 +95,19 @@ def puxar_pedidos_pagos_em_lotes(
                 "Total Refunded": float(o.get("total_refunded", 0))
             })
 
-
-            # 🔹 Entrega lote completo
+            # 🔹 Entrega lote
             if len(buffer) >= lote_tamanho:
                 yield buffer
                 buffer = []
 
         # =========================
-        # PAGINAÇÃO SHOPIFY (CORRETA)
+        # PAGINAÇÃO SHOPIFY
         # =========================
         link = response.headers.get("Link")
-
         next_url = None
+
         if link:
-            partes = link.split(",")
-            for parte in partes:
+            for parte in link.split(","):
                 if 'rel="next"' in parte:
                     next_url = (
                         parte
@@ -118,7 +121,7 @@ def puxar_pedidos_pagos_em_lotes(
         params = {}  # params só na primeira request
 
     # =========================
-    # ÚLTIMO LOTE (RESTO)
+    # ÚLTIMO LOTE
     # =========================
     if buffer:
         yield buffer

@@ -56,7 +56,7 @@ if df.empty:
 # ======================================================
 df.columns = df.columns.str.strip()
 
-# 🔒 Datas — manter datetime para lógica
+# Datas — manter datetime para lógica
 df["Primeiro Pedido"] = (
     pd.to_datetime(df["Primeiro Pedido"], errors="coerce", utc=True)
       .dt.tz_localize(None)
@@ -150,11 +150,9 @@ df_risco = df[
     ascending=[False, False]
 )
 
+df_risco_view = df_risco.copy()
 df_risco_view["Último Pedido"] = (
-    pd.to_datetime(
-        df_risco_view["Último Pedido"],
-        errors="coerce"
-    )
+    pd.to_datetime(df_risco_view["Último Pedido"], errors="coerce")
     .astype(str)
     .replace("NaT", "")
 )

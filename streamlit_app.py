@@ -20,7 +20,7 @@ st.caption("Shopify → Google Sheets → Painel de Clientes")
 st.divider()
 
 PLANILHA = "Clientes Shopify"
-ABA_CLIENTES = "Clientes Shopify"
+ABA_PEDIDOS = "Pedidos Shopify"
 
 
 # ======================================================
@@ -42,83 +42,100 @@ st.divider()
 
 
 # ======================================================
-# 📊 CARREGAMENTO DOS CLIENTES
+# 📦 CARREGAMENTO DOS PEDIDOS (FONTE DA VERDADE)
 # ======================================================
 @st.cache_data(ttl=300)
-def carregar_clientes():
-    return ler_aba(PLANILHA, ABA_CLIENTES)
+def carregar_pedidos():
+    return ler_aba(PLANILHA, ABA_PEDIDOS)
 
-df = carregar_clientes()
+df_pedidos = carregar_pedidos()
 
-if df.empty:
-    st.warning("Nenhum cliente encontrado na aba Clientes Shopify.")
+if df_pedidos.empty:
+    st.warning("Nenhum pedido encontrado na aba Pedidos Shopify.")
     st.stop()
 
 
 # ======================================================
-# 🔧 FUNÇÃO ÚNICA DE PARSE DE DATAS (BLINDADA)
+# 🔧 NORMALIZAÇÃO DE DATAS (ISO SHOPIFY)
 # ======================================================
-def parse_datetime(col: pd.Series) -> pd.Series:
-    col = col.astype(str).str.strip()
+df_pedidos.columns = df_pedidos.columns.str.strip()
 
-    # 1️⃣ tenta pt-BR (DD/MM/YYYY HH:MM:SS)
-    dt = pd.to_datetime(col, dayfirst=True, errors="coerce")
-
-    # 2️⃣ fallback ISO Shopify (com timezone)
-    mask = dt.isna()
-    if mask.any():
-        dt.loc[mask] = (
-            pd.to_datetime(col.loc[mask], errors="coerce", utc=True)
-            .dt.tz_convert("America/Sao_Paulo")
-            .dt.tz_localize(None)
-        )
-
-    return dt
-
-
-# ======================================================
-# NORMALIZAÇÃO
-# ======================================================
-df.columns = df.columns.str.strip()
-
-df["Primeiro Pedido"] = parse_datetime(df["Primeiro Pedido"])
-df["Último Pedido"] = parse_datetime(df["Último Pedido"])
-
-
-# ======================================================
-# 🔍 LOG DE DATAS INVÁLIDAS
-# ======================================================
-invalidos = df[df["Último Pedido"].isna()]
-
-if not invalidos.empty:
-    st.warning("⚠️ Clientes com Último Pedido inválido")
-    st.dataframe(
-        invalidos[["Cliente", "Email", "Último Pedido"]],
-        use_container_width=True
-    )
-
-
-# ======================================================
-# OUTRAS NORMALIZAÇÕES
-# ======================================================
-df["Qtd Pedidos"] = pd.to_numeric(df["Qtd Pedidos"], errors="coerce").fillna(0)
-
-df["Valor Total"] = (
-    df["Valor Total"]
-    .astype(str)
-    .str.replace("R$", "", regex=False)
-    .str.replace(" ", "", regex=False)
-    .str.replace(".", "", regex=False)
-    .str.replace(",", ".", regex=False)
+df_pedidos["Data de criação"] = (
+    pd.to_datetime(df_pedidos["Data de criação"], errors="coerce", utc=True)
+    .dt.tz_convert("America/Sao_Paulo")
+    .dt.tz_localize(None)
 )
 
-df["Valor Total"] = pd.to_numeric(df["Valor Total"], errors="coerce").fillna(0)
+# ======================================================
+# 🔑 CHAVE DO CLIENTE (EMAIL → CUSTOMER ID)
+# ======================================================
+df_pedidos["cliente_key"] = (
+    df_pedidos["Email"]
+    .astype(str)
+    .str.lower()
+    .str.strip()
+)
 
-df["Dias sem comprar"] = pd.to_numeric(
-    df["Dias sem comprar"], errors="coerce"
+df_pedidos.loc[df_pedidos["cliente_key"] == "", "cliente_key"] = (
+    "ID_" + df_pedidos["Customer ID"].astype(str)
+)
+
+# ======================================================
+# 🔢 GARANTE TIPOS
+# ======================================================
+df_pedidos["Valor Total"] = pd.to_numeric(
+    df_pedidos["Valor Total"], errors="coerce"
 ).fillna(0)
 
-df["Classificação"] = df["Classificação"].astype(str)
+
+# ======================================================
+# 🧮 RECÁLCULO DAS MÉTRICAS DE CLIENTES
+# ======================================================
+df = (
+    df_pedidos
+    .groupby("cliente_key")
+    .agg(
+        Cliente=("Cliente", "last"),
+        Email=("Email", "last"),
+        Qtd_Pedidos=("Pedido ID", "count"),
+        Valor_Total=("Valor Total", "sum"),
+        Primeiro_Pedido=("Data de criação", "min"),
+        Ultimo_Pedido=("Data de criação", "max"),
+    )
+    .reset_index(drop=True)
+)
+
+# Padroniza nomes para o painel
+df = df.rename(columns={
+    "Valor_Total": "Valor Total",
+    "Primeiro_Pedido": "Primeiro Pedido",
+    "Ultimo_Pedido": "Último Pedido",
+})
+
+# ======================================================
+# 📆 DIAS SEM COMPRAR
+# ======================================================
+hoje = pd.Timestamp.now(tz="America/Sao_Paulo").tz_localize(None)
+df["Dias sem comprar"] = (hoje - df["Último Pedido"]).dt.days
+
+
+# ======================================================
+# 🏷️ CLASSIFICAÇÃO (EXEMPLO — AJUSTE SEU CRITÉRIO)
+# ======================================================
+def classificar(row):
+    if row["Dias sem comprar"] >= 90:
+        return "💤 Dormente"
+    if row["Dias sem comprar"] >= 45:
+        return "🚨 Em risco"
+    if row["Qtd_Pedidos"] >= 5:
+        return "Campeão"
+    if row["Qtd_Pedidos"] >= 3:
+        return "Leal"
+    if row["Qtd_Pedidos"] >= 2:
+        return "Promissor"
+    return "Novo"
+
+df["Classificação"] = df.apply(classificar, axis=1)
 
 
 # ======================================================
@@ -134,7 +151,7 @@ c2.metric(
     f"R$ {faturamento:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 )
 
-c3.metric("🏆 Campeões", len(df[df["Classificação"].str.contains("Campeão", na=False)]))
+c3.metric("🏆 Campeões", len(df[df["Classificação"] == "Campeão"]))
 c4.metric("🚨 Em risco", len(df[df["Classificação"].str.contains("🚨", na=False)]))
 
 st.divider()
@@ -147,7 +164,7 @@ COLUNAS = [
     "Cliente",
     "Email",
     "Classificação",
-    "Qtd Pedidos",
+    "Qtd_Pedidos",
     "Valor Total",
     "Último Pedido",
     "Dias sem comprar"

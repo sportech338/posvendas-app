@@ -150,9 +150,11 @@ df_risco = df[
     ascending=[False, False]
 )
 
-df_risco_view = df_risco.copy()
 df_risco_view["Último Pedido"] = (
-    df_risco_view["Último Pedido"]
+    pd.to_datetime(
+        df_risco_view["Último Pedido"],
+        errors="coerce"
+    )
     .astype(str)
     .replace("NaT", "")
 )
@@ -184,7 +186,7 @@ df_ativa = df[
 
 df_ativa_view = df_ativa.copy()
 df_ativa_view["Último Pedido"] = (
-    df_ativa_view["Último Pedido"]
+    pd.to_datetime(df_ativa_view["Último Pedido"], errors="coerce")
     .astype(str)
     .replace("NaT", "")
 )
@@ -215,7 +217,7 @@ df_dormentes = df[
 
 df_dormentes_view = df_dormentes.copy()
 df_dormentes_view["Último Pedido"] = (
-    df_dormentes_view["Último Pedido"]
+    pd.to_datetime(df_dormentes_view["Último Pedido"], errors="coerce")
     .astype(str)
     .replace("NaT", "")
 )

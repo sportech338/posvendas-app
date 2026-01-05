@@ -32,6 +32,8 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     - Dias sem comprar
     - Nível (Novo/Promissor/Leal/Campeão)
     
+    ORDENAÇÃO: Mais recente no topo (Ultimo Pedido DESC)
+    
     Raises:
         ValueError: Se colunas obrigatórias estiverem ausentes
     """
@@ -116,11 +118,11 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     )
     
     # ======================================================
-    # 5. ORDENAR POR VALOR (MAIOR PRIMEIRO)
+    # 5. ORDENAR POR DATA (MAIS RECENTE PRIMEIRO)
     # ======================================================
     df_clientes = df_clientes.sort_values(
-        ["Valor Total", "Ultimo Pedido"],
-        ascending=[False, False]
+        ["Ultimo Pedido"],
+        ascending=[False]  # Mais recente no topo
     )
     
     # ======================================================

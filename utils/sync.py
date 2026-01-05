@@ -21,11 +21,15 @@ def sincronizar_shopify_com_planilha(
       → Pedidos Shopify (válidos)
       → Pedidos Ignorados (cancelados / reembolsados)
 
-    ⚠️ NÃO mexe em Clientes Shopify
+    🔒 IMPORTANTE:
+    - NÃO converte datas
+    - NÃO altera timezone
+    - Datas seguem como texto ISO (Shopify padrão)
+    - Regra de negócio fica fora deste módulo
     """
 
     # ==================================================
-    # IDS JÁ EXISTENTES
+    # IDS JÁ EXISTENTES (DEDUPLICAÇÃO)
     # ==================================================
     ids_pedidos = ler_ids_existentes(
         planilha=nome_planilha,
@@ -44,7 +48,7 @@ def sincronizar_shopify_com_planilha(
     total_ignorados = 0
 
     # ==================================================
-    # BUSCA SHOPIFY
+    # BUSCA SHOPIFY (EM LOTES)
     # ==================================================
     for lote in puxar_pedidos_pagos_em_lotes(lote_tamanho):
 
@@ -54,32 +58,43 @@ def sincronizar_shopify_com_planilha(
         if df.empty:
             continue
 
-        # 🔒 Normalização de ID
-        df["Pedido ID"] = (
-            df["Pedido ID"]
-            .astype(str)
-            .str.replace(".0", "", regex=False)
-            .str.strip()
-        )
+        # ==================================================
+        # NORMALIZA ID (SEGURANÇA)
+        # ==================================================
+        if "Pedido ID" in df.columns:
+            df["Pedido ID"] = (
+                df["Pedido ID"]
+                .astype(str)
+                .str.replace(".0", "", regex=False)
+                .str.strip()
+            )
+        else:
+            continue  # sem ID não processa
 
         # ==================================================
-        # IDENTIFICA CANCELADOS / REEMBOLSADOS
+        # CANCELADOS / REEMBOLSADOS
         # ==================================================
         df_cancelados = df[
-            (df["Cancelled At"].notna()) |
-            (df["Total Refunded"] >= df["Valor Total"])
+            (df.get("Cancelled At").notna()) |
+            (df.get("Total Refunded", 0) >= df.get("Valor Total", 0))
         ].copy()
 
         if not df_cancelados.empty:
             df_cancelados["Motivo"] = df_cancelados.apply(
                 lambda r: "CANCELADO"
-                if pd.notna(r["Cancelled At"])
+                if pd.notna(r.get("Cancelled At"))
                 else "REEMBOLSADO",
                 axis=1
             )
 
             df_cancelados_final = df_cancelados[
-                ["Pedido ID", "Data de criação", "Financial Status", "Cancelled At", "Motivo"]
+                [
+                    "Pedido ID",
+                    "Data de criação",
+                    "Financial Status",
+                    "Cancelled At",
+                    "Motivo"
+                ]
             ].rename(columns={
                 "Financial Status": "Status",
                 "Cancelled At": "Data de cancelamento"
@@ -100,12 +115,12 @@ def sincronizar_shopify_com_planilha(
                 total_ignorados += len(df_cancelados_final)
 
         # ==================================================
-        # PEDIDOS VÁLIDOS (NÃO CANCELADOS)
+        # PEDIDOS VÁLIDOS
         # ==================================================
         df_validos = df[
-            (df["Cancelled At"].isna()) &
-            (df["Total Refunded"] < df["Valor Total"])
-        ]
+            (df.get("Cancelled At").isna()) &
+            (df.get("Total Refunded", 0) < df.get("Valor Total", 0))
+        ].copy()
 
         df_validos = df_validos[
             ~df_validos["Pedido ID"].isin(ids_pedidos)
@@ -114,7 +129,7 @@ def sincronizar_shopify_com_planilha(
         if df_validos.empty:
             continue
 
-        # ❌ REMOVE COLUNAS INTERNAS
+        # Remove colunas internas
         df_validos_final = df_validos.drop(
             columns=["Cancelled At", "Total Refunded", "Financial Status"],
             errors="ignore"

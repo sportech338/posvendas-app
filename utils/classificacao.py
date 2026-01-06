@@ -212,7 +212,6 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
             "ciclo_media": float | None,
             "threshold_ativo": int,
             "threshold_risco": int,
-            "threshold_dormente": int,
             "total_recorrentes": int
         }
     
@@ -227,7 +226,6 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
             "ciclo_media": None,
             "threshold_ativo": 45,
             "threshold_risco": 90,
-            "threshold_dormente": 90,
             "total_recorrentes": 0
         }
     
@@ -241,7 +239,6 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
             "ciclo_media": None,
             "threshold_ativo": 45,
             "threshold_risco": 90,
-            "threshold_dormente": 90,
             "total_recorrentes": len(clientes_recorrentes)
         }
     
@@ -268,7 +265,6 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
             "ciclo_media": None,
             "threshold_ativo": 45,
             "threshold_risco": 90,
-            "threshold_dormente": 90,
             "total_recorrentes": 0
         }
     
@@ -285,7 +281,6 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         "ciclo_media": round(ciclo_media, 1),
         "threshold_ativo": threshold_ativo,
         "threshold_risco": threshold_risco,
-        "threshold_dormente": threshold_risco,
         "total_recorrentes": len(clientes_recorrentes)
     }
 
@@ -335,125 +330,3 @@ def calcular_estado(
     df_clientes["Estado"] = df_clientes["Dias sem comprar"].apply(_classificar_estado)
     
     return df_clientes
-
-
-# ======================================================
-# FILTRAR POR ESTADO
-# ======================================================
-def filtrar_por_estado(
-    df_clientes: pd.DataFrame, 
-    estado: str
-) -> pd.DataFrame:
-    """
-    Filtra clientes por estado específico.
-    
-    Args:
-        df_clientes: DataFrame com clientes
-        estado: "🟢 Ativo", "🚨 Em risco" ou "💤 Dormente"
-    
-    Returns:
-        pd.DataFrame: DataFrame filtrado
-    
-    Exemplo:
-        >>> clientes_risco = filtrar_por_estado(df, "🚨 Em risco")
-    """
-    if "Estado" not in df_clientes.columns:
-        raise ValueError("❌ Coluna 'Estado' não encontrada! Execute calcular_estado() primeiro.")
-    
-    return df_clientes[df_clientes["Estado"] == estado].copy()
-
-
-# ======================================================
-# FILTRAR POR NÍVEL (ANTES ERA "CLASSIFICAÇÃO")
-# ======================================================
-def filtrar_por_classificacao(
-    df_clientes: pd.DataFrame,
-    classificacoes: List[str]
-) -> pd.DataFrame:
-    """
-    Filtra clientes por uma ou mais níveis.
-    
-    Args:
-        df_clientes: DataFrame com clientes
-        classificacoes: Lista de níveis, ex: ["Campeão", "Leal"]
-    
-    Returns:
-        pd.DataFrame: DataFrame filtrado
-    
-    Exemplo:
-        >>> vips = filtrar_por_classificacao(df, ["Campeão", "Leal"])
-    """
-    if "Nível" not in df_clientes.columns:
-        raise ValueError("❌ Coluna 'Nível' não encontrada!")
-    
-    return df_clientes[df_clientes["Nível"].isin(classificacoes)].copy()
-
-
-# ======================================================
-# MÉTRICAS AGREGADAS
-# ======================================================
-def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> Dict:
-    """
-    Calcula métricas gerais da base de clientes.
-    
-    Args:
-        df_clientes: DataFrame com clientes agregados
-    
-    Returns:
-        dict: {
-            "total_clientes": int,
-            "faturamento_total": float,
-            "ticket_medio": float,
-            "total_campeoes": int,
-            "total_leais": int,
-            "total_promissores": int,
-            "total_novos": int,
-            "total_ativos": int,
-            "total_em_risco": int,
-            "total_dormentes": int
-        }
-    
-    Exemplo:
-        >>> metricas = calcular_metricas_gerais(df)
-        >>> print(f"Faturamento: R$ {metricas['faturamento_total']:,.2f}")
-    """
-    
-    if df_clientes.empty:
-        return {
-            "total_clientes": 0,
-            "faturamento_total": 0.0,
-            "ticket_medio": 0.0,
-            "total_campeoes": 0,
-            "total_leais": 0,
-            "total_promissores": 0,
-            "total_novos": 0,
-            "total_ativos": 0,
-            "total_em_risco": 0,
-            "total_dormentes": 0
-        }
-    
-    total_clientes = len(df_clientes)
-    faturamento_total = float(df_clientes["Valor Total"].sum())
-    ticket_medio = faturamento_total / total_clientes if total_clientes > 0 else 0.0
-    
-    # Contar por nível (agora é "Nível" ao invés de "Classificação")
-    contagem_nivel = df_clientes["Nível"].value_counts().to_dict()
-    
-    # Contar por estado (se coluna existir)
-    if "Estado" in df_clientes.columns:
-        contagem_estado = df_clientes["Estado"].value_counts().to_dict()
-    else:
-        contagem_estado = {}
-    
-    return {
-        "total_clientes": total_clientes,
-        "faturamento_total": faturamento_total,
-        "ticket_medio": ticket_medio,
-        "total_campeoes": contagem_nivel.get("Campeão", 0),
-        "total_leais": contagem_nivel.get("Leal", 0),
-        "total_promissores": contagem_nivel.get("Promissor", 0),
-        "total_novos": contagem_nivel.get("Novo", 0),
-        "total_ativos": contagem_estado.get("🟢 Ativo", 0),
-        "total_em_risco": contagem_estado.get("🚨 Em risco", 0),
-        "total_dormentes": contagem_estado.get("💤 Dormente", 0)
-    }

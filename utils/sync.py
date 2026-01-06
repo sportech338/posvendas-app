@@ -1,74 +1,55 @@
 # utils/sync.py
 
 import pandas as pd
-
-from utils.shopify import puxar_pedidos_pagos_em_lotes
-from utils.sheets import (
-    append_aba,
-    ler_ids_existentes,
-    ler_aba,
-    escrever_aba
-)
+from utils.shopify import buscar_pedidos_pagos_direto
 from utils.classificacao import agregar_por_cliente, calcular_estado
 
 
 # ======================================================
-# SINCRONIZAÇÃO COMPLETA (PEDIDOS + CLIENTES)
+# CARREGAR DADOS DIRETO DA SHOPIFY (COM CACHE)
 # ======================================================
-def sincronizar_shopify_completo(
-    nome_planilha: str = "Clientes Shopify",
-    lote_tamanho: int = 500
-) -> dict:
+def carregar_dados_shopify() -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Sincronização COMPLETA em 2 etapas:
+    Carrega pedidos DIRETO da Shopify e agrega clientes.
     
-    1️⃣ Sincroniza pedidos da Shopify → Planilha
-       - Pedidos válidos → "Pedidos Shopify"
-       - Cancelados/Reembolsados → "Pedidos Ignorados"
+    Fluxo:
+    1. Busca pedidos pagos da Shopify (cache 5 min)
+    2. Filtra cancelados/reembolsados
+    3. Agrega por cliente
+    4. Calcula estados e níveis
     
-    2️⃣ Agrega clientes e salva na planilha
-       - Lê "Pedidos Shopify"
-       - Agrega por Customer ID
-       - Classifica (Novo/Promissor/Leal/Campeão)
-       - Calcula estados (Ativo/Em Risco/Dormente)
-       - Salva em "Clientes Shopify"
+    Returns:
+        tuple: (df_pedidos, df_clientes)
     
-    Retorna estatísticas completas da sincronização.
+    Exemplo:
+        >>> df_pedidos, df_clientes = carregar_dados_shopify()
+        >>> print(len(df_clientes))
     """
     
     # ==================================================
-    # ETAPA 1: SINCRONIZAR PEDIDOS
+    # 1. BUSCAR PEDIDOS DA SHOPIFY (COM CACHE)
     # ==================================================
-    resultado_pedidos = sincronizar_shopify_com_planilha(
-        nome_planilha=nome_planilha,
-        lote_tamanho=lote_tamanho
-    )
-    
-    if resultado_pedidos["status"] != "success":
-        return resultado_pedidos
-    
-    # ==================================================
-    # ETAPA 2: LER PEDIDOS DA PLANILHA
-    # ==================================================
-    try:
-        df_pedidos = ler_aba(nome_planilha, "Pedidos Shopify")
-    except Exception as e:
-        return {
-            "status": "error",
-            "mensagem": f"❌ Erro ao ler planilha: {str(e)}"
-        }
+    df_pedidos = buscar_pedidos_pagos_direto()
     
     if df_pedidos.empty:
-        return {
-            "status": "warning",
-            "mensagem": (
-                f"{resultado_pedidos['mensagem']}\n\n"
-                "⚠️ Nenhum pedido encontrado para agregar clientes"
-            )
-        }
+        return pd.DataFrame(), pd.DataFrame()
     
     # ==================================================
-    # ETAPA 3: NORMALIZAR DATAS
+    # 2. FILTRAR PEDIDOS VÁLIDOS
+    # ==================================================
+    # Remover cancelados
+    df_pedidos = df_pedidos[df_pedidos["Cancelled At"].isna()]
+    
+    # Remover totalmente reembolsados
+    df_pedidos = df_pedidos[
+        df_pedidos["Total Refunded"] < df_pedidos["Valor Total"]
+    ]
+    
+    if df_pedidos.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    
+    # ==================================================
+    # 3. NORMALIZAR DATAS
     # ==================================================
     df_pedidos["Data de criação"] = (
         pd.to_datetime(df_pedidos["Data de criação"], errors="coerce", utc=True)
@@ -77,21 +58,15 @@ def sincronizar_shopify_completo(
     )
     
     # ==================================================
-    # ETAPA 4: AGREGAR POR CLIENTE
+    # 4. AGREGAR CLIENTES
     # ==================================================
     df_clientes = agregar_por_cliente(df_pedidos)
     
     if df_clientes.empty:
-        return {
-            "status": "warning",
-            "mensagem": (
-                f"{resultado_pedidos['mensagem']}\n\n"
-                "⚠️ Nenhum cliente gerado após agregação"
-            )
-        }
+        return df_pedidos, pd.DataFrame()
     
     # ==================================================
-    # ETAPA 5: CALCULAR ESTADOS (ATIVO/RISCO/DORMENTE)
+    # 5. CALCULAR ESTADOS
     # ==================================================
     df_clientes = calcular_estado(
         df_clientes,
@@ -100,7 +75,7 @@ def sincronizar_shopify_completo(
     )
     
     # ==================================================
-    # ETAPA 5.1: REORDENAR COLUNAS NA ORDEM FINAL
+    # 6. REORDENAR COLUNAS
     # ==================================================
     colunas_finais = [
         "Customer ID",
@@ -117,214 +92,110 @@ def sincronizar_shopify_completo(
     
     df_clientes = df_clientes[colunas_finais]
     
-    # ==================================================
-    # ETAPA 6: SOBRESCREVER ABA "Clientes Shopify"
-    # ==================================================
-    try:
-        escrever_aba(
-            planilha=nome_planilha,
-            aba="Clientes Shopify",
-            df=df_clientes
-        )
-    except Exception as e:
+    return df_pedidos, df_clientes
+
+
+# ======================================================
+# CALCULAR ESTATÍSTICAS
+# ======================================================
+def calcular_estatisticas(df_clientes: pd.DataFrame) -> dict:
+    """
+    Calcula estatísticas da base de clientes.
+    
+    Args:
+        df_clientes: DataFrame com clientes agregados
+    
+    Returns:
+        dict: Estatísticas completas
+    
+    Exemplo:
+        >>> stats = calcular_estatisticas(df_clientes)
+        >>> print(f"Total: {stats['total_clientes']}")
+    """
+    
+    if df_clientes.empty:
         return {
-            "status": "error",
-            "mensagem": f"❌ Erro ao escrever aba Clientes: {str(e)}"
+            "total_clientes": 0,
+            "faturamento_total": 0.0,
+            "ticket_medio": 0.0,
+            "campeoes": 0,
+            "leais": 0,
+            "promissores": 0,
+            "novos": 0,
+            "ativos": 0,
+            "em_risco": 0,
+            "dormentes": 0
         }
     
-    # ==================================================
-    # ESTATÍSTICAS FINAIS (AGORA USA "Nível")
-    # ==================================================
+    # Métricas gerais
+    total_clientes = len(df_clientes)
+    faturamento_total = float(df_clientes["Valor Total"].sum())
+    ticket_medio = faturamento_total / total_clientes if total_clientes > 0 else 0.0
+    
+    # Por nível
     total_campeoes = len(df_clientes[df_clientes["Nível"] == "Campeão"])
     total_leais = len(df_clientes[df_clientes["Nível"] == "Leal"])
     total_promissores = len(df_clientes[df_clientes["Nível"] == "Promissor"])
     total_novos = len(df_clientes[df_clientes["Nível"] == "Novo"])
     
+    # Por estado
     total_ativos = len(df_clientes[df_clientes["Estado"] == "🟢 Ativo"])
     total_risco = len(df_clientes[df_clientes["Estado"] == "🚨 Em risco"])
     total_dormentes = len(df_clientes[df_clientes["Estado"] == "💤 Dormente"])
     
     return {
-        "status": "success",
-        "mensagem": (
-            f"{resultado_pedidos['mensagem']}\n\n"
-            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"👥 **Total de clientes:** {len(df_clientes)}\n\n"
-            "**📊 Por Nível:**\n"
-            f"  🏆 Campeões: {total_campeoes}\n"
-            f"  💙 Leais: {total_leais}\n"
-            f"  ⭐ Promissores: {total_promissores}\n"
-            f"  🆕 Novos: {total_novos}\n\n"
-            "**🚦 Por Estado:**\n"
-            f"  🟢 Ativos: {total_ativos}\n"
-            f"  🚨 Em Risco: {total_risco}\n"
-            f"  💤 Dormentes: {total_dormentes}"
-        ),
-        "stats": {
-            "total_pedidos_processados": resultado_pedidos.get("total_processados", 0),
-            "total_clientes": len(df_clientes),
-            "campeoes": total_campeoes,
-            "leais": total_leais,
-            "promissores": total_promissores,
-            "novos": total_novos,
-            "ativos": total_ativos,
-            "em_risco": total_risco,
-            "dormentes": total_dormentes
-        }
+        "total_clientes": total_clientes,
+        "faturamento_total": faturamento_total,
+        "ticket_medio": ticket_medio,
+        "campeoes": total_campeoes,
+        "leais": total_leais,
+        "promissores": total_promissores,
+        "novos": total_novos,
+        "ativos": total_ativos,
+        "em_risco": total_risco,
+        "dormentes": total_dormentes
     }
 
 
 # ======================================================
-# SINCRONIZAÇÃO APENAS DE PEDIDOS (FUNÇÃO ORIGINAL)
+# SALVAR BACKUP NO GOOGLE SHEETS (OPCIONAL)
 # ======================================================
-def sincronizar_shopify_com_planilha(
-    nome_planilha: str = "Clientes Shopify",
-    lote_tamanho: int = 500
-) -> dict:
+def salvar_backup_sheets(
+    df_pedidos: pd.DataFrame,
+    df_clientes: pd.DataFrame,
+    nome_planilha: str = "Clientes Shopify"
+):
     """
-    Sincroniza APENAS pedidos da Shopify para a planilha.
-    Não agrega clientes.
+    Salva backup dos dados no Google Sheets (opcional).
     
-    Fluxo:
-    Shopify →
-      → Pedidos Shopify (válidos)
-      → Pedidos Ignorados (cancelados / reembolsados)
-
-    🔒 IMPORTANTE:
-    - NÃO converte datas
-    - NÃO altera timezone
-    - Datas seguem como texto ISO (Shopify padrão)
-    - Regra de negócio fica fora deste módulo
+    Use apenas se quiser manter histórico no Sheets.
+    
+    Args:
+        df_pedidos: DataFrame de pedidos
+        df_clientes: DataFrame de clientes
+        nome_planilha: Nome da planilha no Google Drive
+    
+    Exemplo:
+        >>> salvar_backup_sheets(df_pedidos, df_clientes)
     """
-
-    # ==================================================
-    # IDS JÁ EXISTENTES (DEDUPLICAÇÃO)
-    # ==================================================
-    ids_pedidos = ler_ids_existentes(
-        planilha=nome_planilha,
-        aba="Pedidos Shopify",
-        coluna_id="Pedido ID"
-    )
-
-    ids_ignorados = ler_ids_existentes(
-        planilha=nome_planilha,
-        aba="Pedidos Ignorados",
-        coluna_id="Pedido ID"
-    )
-
-    total_processados = 0
-    total_novos = 0
-    total_ignorados = 0
-
-    # ==================================================
-    # BUSCA SHOPIFY (EM LOTES)
-    # ==================================================
-    for lote in puxar_pedidos_pagos_em_lotes(lote_tamanho):
-
-        df = pd.DataFrame(lote)
-        total_processados += len(df)
-
-        if df.empty:
-            continue
-
-        # ==================================================
-        # NORMALIZA ID (SEGURANÇA)
-        # ==================================================
-        if "Pedido ID" in df.columns:
-            df["Pedido ID"] = (
-                df["Pedido ID"]
-                .astype(str)
-                .str.replace(".0", "", regex=False)
-                .str.strip()
-            )
-        else:
-            continue  # sem ID não processa
-
-        # ==================================================
-        # CANCELADOS / REEMBOLSADOS
-        # ==================================================
-        df_cancelados = df[
-            (df.get("Cancelled At").notna()) |
-            (df.get("Total Refunded", 0) >= df.get("Valor Total", 0))
-        ].copy()
-
-        if not df_cancelados.empty:
-            df_cancelados["Motivo"] = df_cancelados.apply(
-                lambda r: "CANCELADO"
-                if pd.notna(r.get("Cancelled At"))
-                else "REEMBOLSADO",
-                axis=1
-            )
-
-            df_cancelados_final = df_cancelados[
-                [
-                    "Pedido ID",
-                    "Data de criação",
-                    "Financial Status",
-                    "Cancelled At",
-                    "Motivo"
-                ]
-            ].rename(columns={
-                "Financial Status": "Status",
-                "Cancelled At": "Data de cancelamento"
-            })
-
-            df_cancelados_final = df_cancelados_final[
-                ~df_cancelados_final["Pedido ID"].isin(ids_ignorados)
-            ]
-
-            if not df_cancelados_final.empty:
-                append_aba(
-                    planilha=nome_planilha,
-                    aba="Pedidos Ignorados",
-                    df=df_cancelados_final
-                )
-
-                ids_ignorados.update(df_cancelados_final["Pedido ID"].tolist())
-                total_ignorados += len(df_cancelados_final)
-
-        # ==================================================
-        # PEDIDOS VÁLIDOS
-        # ==================================================
-        df_validos = df[
-            (df.get("Cancelled At").isna()) &
-            (df.get("Total Refunded", 0) < df.get("Valor Total", 0))
-        ].copy()
-
-        df_validos = df_validos[
-            ~df_validos["Pedido ID"].isin(ids_pedidos)
-        ]
-
-        if df_validos.empty:
-            continue
-
-        # Remove colunas internas
-        df_validos_final = df_validos.drop(
-            columns=["Cancelled At", "Total Refunded", "Financial Status"],
-            errors="ignore"
-        )
-
-        append_aba(
-            planilha=nome_planilha,
-            aba="Pedidos Shopify",
-            df=df_validos_final
-        )
-
-        ids_pedidos.update(df_validos_final["Pedido ID"].tolist())
-        total_novos += len(df_validos_final)
-
-    # ==================================================
-    # RETORNO
-    # ==================================================
-    return {
-        "status": "success",
-        "mensagem": (
-            "✅ Sincronização de pedidos concluída\n\n"
-            f"📦 Pedidos processados: {total_processados}\n"
-            f"🆕 Pedidos válidos adicionados: {total_novos}\n"
-            f"🚫 Pedidos ignorados: {total_ignorados}"
-        ),
-        "total_processados": total_processados,
-        "total_novos": total_novos,
-        "total_ignorados": total_ignorados
-    }
+    from utils.sheets import escrever_aba
+    
+    try:
+        # Salvar pedidos
+        if not df_pedidos.empty:
+            escrever_aba(nome_planilha, "Pedidos Shopify", df_pedidos)
+        
+        # Salvar clientes
+        if not df_clientes.empty:
+            escrever_aba(nome_planilha, "Clientes Shopify", df_clientes)
+        
+        return {
+            "status": "success",
+            "mensagem": "✅ Backup salvo no Google Sheets"
+        }
+    
+    except Exception as e:
+        return {
+            "status": "error",
+            "mensagem": f"❌ Erro ao salvar backup: {str(e)}"
+        }

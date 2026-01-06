@@ -75,7 +75,13 @@ try:
             st.success(f"🆕 {resultado_sync['novos_pedidos']} novos pedidos encontrados!")
         
 except Exception as e:
+    import traceback
     st.error(f"❌ Erro ao carregar dados: {str(e)}")
+    
+    # ✅ ADICIONAR: Mostrar traceback completo
+    with st.expander("🔍 Ver detalhes do erro (para debug)"):
+        st.code(traceback.format_exc())
+    
     st.info("💡 Execute a primeira sincronização para criar as abas necessárias")
     st.stop()
 

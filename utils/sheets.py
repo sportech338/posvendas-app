@@ -378,3 +378,46 @@ def aba_existe(planilha: str, aba: str) -> bool:
         return True
     except gspread.WorksheetNotFound:
         return False
+
+# ======================================================
+# INSERIR LINHAS LOGO ABAIXO DO CABEÇALHO (LINHA 2)
+# ======================================================
+def inserir_abaixo_cabecalho(planilha: str, aba: str, df: pd.DataFrame):
+    """
+    Insere novas linhas logo abaixo do cabeçalho (linha 2),
+    empurrando os registros antigos para baixo.
+    """
+    if df.empty:
+        return
+
+    sh = abrir_planilha(planilha)
+
+    # Criar aba se não existir
+    try:
+        ws = sh.worksheet(aba)
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
+        ws.append_row(df.columns.tolist())
+
+    # Quantidade de linhas novas
+    qtd_linhas = len(df)
+
+    # 👉 INSERE LINHAS VAZIAS NA LINHA 2
+    ws.insert_rows(row=2, number=qtd_linhas)
+
+    # Preparar valores
+    valores = []
+    for _, row in df.iterrows():
+        linha = []
+        for val in row:
+            if pd.notna(val) and isinstance(val, (int, float)):
+                linha.append(val)
+            elif pd.isna(val):
+                linha.append("")
+            else:
+                linha.append(str(val))
+        valores.append(linha)
+
+    # 👉 ESCREVE OS DADOS A PARTIR DA LINHA 2
+    ws.update("A2", valores, value_input_option="USER_ENTERED")
+

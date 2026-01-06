@@ -193,9 +193,13 @@ with st.expander("📊 Análise de Ciclo de Compra — Ajustar Thresholds", expa
                 )
             
             st.info(
-                f"📌 **Atualmente usando:** Ativo < 45 dias | Em Risco 45-90 dias | Dormente > 90 dias\n\n"
+                f"📌 **Atualmente usando:** "
+                f"🟢 Ativo < 60 dias | "
+                f"🚨 Em risco 60–120 dias | "
+                f"💤 Dormente ≥ 120 dias\n\n"
                 f"💡 Para ajustar, modifique os thresholds em `utils/sync.py` na função `sincronizar_shopify_completo()`"
             )
+
         else:
             st.warning(
                 f"⚠️ Poucos clientes recorrentes para análise estatística "

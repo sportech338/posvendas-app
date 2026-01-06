@@ -107,7 +107,11 @@ except Exception as e:
     st.info("💡 Execute a sincronização primeiro para criar a aba 'Clientes Shopify'")
     st.stop()
     
-df["Último Pedido"] = pd.to_datetime(df["Último Pedido"], errors="coerce")
+df["Último Pedido"] = pd.to_datetime(
+    df["Último Pedido"],
+    errors="coerce",
+    dayfirst=True
+)
 
 # ======================================================
 # 🧾 LOG — QUALIDADE DA COLUNA "ÚLTIMO PEDIDO"
@@ -297,11 +301,14 @@ def formatar_tabela(df_input: pd.DataFrame) -> pd.DataFrame:
     # FORMATAR DATA (ROBUSTO — SEM DEPENDER DO DTYPE)
     # ======================================================
     df_display["Último Pedido"] = (
-        pd.to_datetime(df_input["Último Pedido"], errors="coerce")
+        pd.to_datetime(
+            df_input["Último Pedido"],
+            errors="coerce",
+            dayfirst=True
+        )
         .dt.strftime("%d/%m/%Y %H:%M")
         .fillna("-")
     )
-
     
     return df_display
 

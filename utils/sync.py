@@ -1,55 +1,128 @@
 # utils/sync.py
 
 import pandas as pd
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from utils.shopify import buscar_pedidos_pagos_direto
+from utils.sheets import ler_aba, escrever_aba, ler_ids_existentes, append_aba
 from utils.classificacao import agregar_por_cliente, calcular_estado
 
+APP_TZ = ZoneInfo("America/Sao_Paulo")
+
 
 # ======================================================
-# CARREGAR DADOS DIRETO DA SHOPIFY (COM CACHE)
+# SINCRONIZAÇÃO INCREMENTAL RÁPIDA
 # ======================================================
-def carregar_dados_shopify() -> tuple[pd.DataFrame, pd.DataFrame]:
+def sincronizar_incremental(nome_planilha: str = "Clientes Shopify") -> dict:
     """
-    Carrega pedidos DIRETO da Shopify e agrega clientes.
+    Sincronização INCREMENTAL e RÁPIDA:
     
-    Fluxo:
-    1. Busca pedidos pagos da Shopify (cache 5 min)
-    2. Filtra cancelados/reembolsados
-    3. Agrega por cliente
-    4. Calcula estados e níveis
+    1. Busca pedidos da Shopify (cache 5 min)
+    2. Compara com IDs da planilha
+    3. Adiciona APENAS pedidos novos
+    4. Reagrega clientes
     
-    Returns:
-        tuple: (df_pedidos, df_clientes)
-    
-    Exemplo:
-        >>> df_pedidos, df_clientes = carregar_dados_shopify()
-        >>> print(len(df_clientes))
+    Vantagem: Não refaz tudo, só processa o que é novo!
     """
     
     # ==================================================
     # 1. BUSCAR PEDIDOS DA SHOPIFY (COM CACHE)
     # ==================================================
-    df_pedidos = buscar_pedidos_pagos_direto()
+    df_shopify = buscar_pedidos_pagos_direto()
     
-    if df_pedidos.empty:
-        return pd.DataFrame(), pd.DataFrame()
+    if df_shopify.empty:
+        return {
+            "status": "warning",
+            "mensagem": "⚠️ Nenhum pedido encontrado na Shopify",
+            "novos_pedidos": 0,
+            "total_clientes": 0
+        }
     
     # ==================================================
     # 2. FILTRAR PEDIDOS VÁLIDOS
     # ==================================================
-    # Remover cancelados
-    df_pedidos = df_pedidos[df_pedidos["Cancelled At"].isna()]
+    df_shopify = df_shopify[df_shopify["Cancelled At"].isna()]
+    df_shopify = df_shopify[df_shopify["Total Refunded"] < df_shopify["Valor Total"]]
     
-    # Remover totalmente reembolsados
-    df_pedidos = df_pedidos[
-        df_pedidos["Total Refunded"] < df_pedidos["Valor Total"]
-    ]
+    if df_shopify.empty:
+        return {
+            "status": "warning",
+            "mensagem": "⚠️ Nenhum pedido válido na Shopify",
+            "novos_pedidos": 0,
+            "total_clientes": 0
+        }
     
-    if df_pedidos.empty:
-        return pd.DataFrame(), pd.DataFrame()
+    # Normalizar IDs
+    df_shopify["Pedido ID"] = df_shopify["Pedido ID"].astype(str).str.strip()
     
     # ==================================================
-    # 3. NORMALIZAR DATAS
+    # 3. BUSCAR IDS JÁ SALVOS NA PLANILHA
+    # ==================================================
+    try:
+        ids_existentes = ler_ids_existentes(
+            planilha=nome_planilha,
+            aba="Pedidos Shopify",
+            coluna_id="Pedido ID"
+        )
+    except Exception:
+        # Primeira vez, não existe aba ainda
+        ids_existentes = set()
+    
+    # ==================================================
+    # 4. FILTRAR APENAS PEDIDOS NOVOS
+    # ==================================================
+    df_novos = df_shopify[~df_shopify["Pedido ID"].isin(ids_existentes)]
+    
+    total_novos = len(df_novos)
+    
+    # ==================================================
+    # 5. ADICIONAR PEDIDOS NOVOS NA PLANILHA
+    # ==================================================
+    if total_novos > 0:
+        # Remover colunas internas
+        df_novos_salvar = df_novos.drop(
+            columns=["Cancelled At", "Total Refunded", "Financial Status"],
+            errors="ignore"
+        )
+        
+        try:
+            append_aba(
+                planilha=nome_planilha,
+                aba="Pedidos Shopify",
+                df=df_novos_salvar
+            )
+        except Exception as e:
+            return {
+                "status": "error",
+                "mensagem": f"❌ Erro ao salvar pedidos: {str(e)}",
+                "novos_pedidos": 0,
+                "total_clientes": 0
+            }
+    
+    # ==================================================
+    # 6. LER TODOS OS PEDIDOS DA PLANILHA
+    # ==================================================
+    try:
+        df_pedidos = ler_aba(nome_planilha, "Pedidos Shopify")
+    except Exception as e:
+        return {
+            "status": "error",
+            "mensagem": f"❌ Erro ao ler pedidos da planilha: {str(e)}",
+            "novos_pedidos": total_novos,
+            "total_clientes": 0
+        }
+    
+    if df_pedidos.empty:
+        return {
+            "status": "warning",
+            "mensagem": "⚠️ Planilha vazia após sincronização",
+            "novos_pedidos": total_novos,
+            "total_clientes": 0
+        }
+    
+    # ==================================================
+    # 7. NORMALIZAR DATAS
     # ==================================================
     df_pedidos["Data de criação"] = (
         pd.to_datetime(df_pedidos["Data de criação"], errors="coerce", utc=True)
@@ -58,15 +131,20 @@ def carregar_dados_shopify() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     
     # ==================================================
-    # 4. AGREGAR CLIENTES
+    # 8. AGREGAR CLIENTES
     # ==================================================
     df_clientes = agregar_por_cliente(df_pedidos)
     
     if df_clientes.empty:
-        return df_pedidos, pd.DataFrame()
+        return {
+            "status": "warning",
+            "mensagem": "⚠️ Nenhum cliente gerado",
+            "novos_pedidos": total_novos,
+            "total_clientes": 0
+        }
     
     # ==================================================
-    # 5. CALCULAR ESTADOS
+    # 9. CALCULAR ESTADOS
     # ==================================================
     df_clientes = calcular_estado(
         df_clientes,
@@ -75,7 +153,7 @@ def carregar_dados_shopify() -> tuple[pd.DataFrame, pd.DataFrame]:
     )
     
     # ==================================================
-    # 6. REORDENAR COLUNAS
+    # 10. REORDENAR COLUNAS
     # ==================================================
     colunas_finais = [
         "Customer ID",
@@ -92,7 +170,108 @@ def carregar_dados_shopify() -> tuple[pd.DataFrame, pd.DataFrame]:
     
     df_clientes = df_clientes[colunas_finais]
     
-    return df_pedidos, df_clientes
+    # ==================================================
+    # 11. SOBRESCREVER ABA CLIENTES
+    # ==================================================
+    try:
+        escrever_aba(
+            planilha=nome_planilha,
+            aba="Clientes Shopify",
+            df=df_clientes
+        )
+    except Exception as e:
+        return {
+            "status": "error",
+            "mensagem": f"❌ Erro ao salvar clientes: {str(e)}",
+            "novos_pedidos": total_novos,
+            "total_clientes": len(df_clientes)
+        }
+    
+    # ==================================================
+    # 12. ESTATÍSTICAS
+    # ==================================================
+    total_campeoes = len(df_clientes[df_clientes["Nível"] == "Campeão"])
+    total_leais = len(df_clientes[df_clientes["Nível"] == "Leal"])
+    total_promissores = len(df_clientes[df_clientes["Nível"] == "Promissor"])
+    total_novos_nivel = len(df_clientes[df_clientes["Nível"] == "Novo"])
+    
+    total_ativos = len(df_clientes[df_clientes["Estado"] == "🟢 Ativo"])
+    total_risco = len(df_clientes[df_clientes["Estado"] == "🚨 Em risco"])
+    total_dormentes = len(df_clientes[df_clientes["Estado"] == "💤 Dormente"])
+    
+    if total_novos > 0:
+        mensagem = (
+            f"✅ Sincronização concluída\n\n"
+            f"🆕 **{total_novos} novos pedidos** adicionados!\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👥 **Total de clientes:** {len(df_clientes)}\n\n"
+            f"**📊 Por Nível:**\n"
+            f"  🏆 Campeões: {total_campeoes}\n"
+            f"  💙 Leais: {total_leais}\n"
+            f"  ⭐ Promissores: {total_promissores}\n"
+            f"  🆕 Novos: {total_novos_nivel}\n\n"
+            f"**🚦 Por Estado:**\n"
+            f"  🟢 Ativos: {total_ativos}\n"
+            f"  🚨 Em Risco: {total_risco}\n"
+            f"  💤 Dormentes: {total_dormentes}"
+        )
+    else:
+        mensagem = (
+            f"✅ Base já está atualizada!\n\n"
+            f"📦 Nenhum pedido novo encontrado\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"👥 **Total de clientes:** {len(df_clientes)}\n\n"
+            f"**📊 Por Nível:**\n"
+            f"  🏆 Campeões: {total_campeoes}\n"
+            f"  💙 Leais: {total_leais}\n"
+            f"  ⭐ Promissores: {total_promissores}\n"
+            f"  🆕 Novos: {total_novos_nivel}\n\n"
+            f"**🚦 Por Estado:**\n"
+            f"  🟢 Ativos: {total_ativos}\n"
+            f"  🚨 Em Risco: {total_risco}\n"
+            f"  💤 Dormentes: {total_dormentes}"
+        )
+    
+    return {
+        "status": "success",
+        "mensagem": mensagem,
+        "novos_pedidos": total_novos,
+        "total_clientes": len(df_clientes)
+    }
+
+
+# ======================================================
+# CARREGAR DADOS DA PLANILHA (RÁPIDO)
+# ======================================================
+def carregar_dados_planilha(nome_planilha: str = "Clientes Shopify") -> pd.DataFrame:
+    """
+    Carrega clientes JÁ PROCESSADOS da planilha.
+    
+    Muito mais rápido que processar tudo novamente!
+    
+    Returns:
+        DataFrame com clientes agregados
+    """
+    try:
+        df_clientes = ler_aba(nome_planilha, "Clientes Shopify")
+        
+        # Normalizar datas
+        if "Primeiro Pedido" in df_clientes.columns:
+            df_clientes["Primeiro Pedido"] = pd.to_datetime(
+                df_clientes["Primeiro Pedido"], 
+                errors="coerce"
+            )
+        
+        if "Ultimo Pedido" in df_clientes.columns:
+            df_clientes["Ultimo Pedido"] = pd.to_datetime(
+                df_clientes["Ultimo Pedido"], 
+                errors="coerce"
+            )
+        
+        return df_clientes
+        
+    except Exception as e:
+        raise Exception(f"Erro ao carregar planilha: {str(e)}")
 
 
 # ======================================================
@@ -155,47 +334,3 @@ def calcular_estatisticas(df_clientes: pd.DataFrame) -> dict:
         "em_risco": total_risco,
         "dormentes": total_dormentes
     }
-
-
-# ======================================================
-# SALVAR BACKUP NO GOOGLE SHEETS (OPCIONAL)
-# ======================================================
-def salvar_backup_sheets(
-    df_pedidos: pd.DataFrame,
-    df_clientes: pd.DataFrame,
-    nome_planilha: str = "Clientes Shopify"
-):
-    """
-    Salva backup dos dados no Google Sheets (opcional).
-    
-    Use apenas se quiser manter histórico no Sheets.
-    
-    Args:
-        df_pedidos: DataFrame de pedidos
-        df_clientes: DataFrame de clientes
-        nome_planilha: Nome da planilha no Google Drive
-    
-    Exemplo:
-        >>> salvar_backup_sheets(df_pedidos, df_clientes)
-    """
-    from utils.sheets import escrever_aba
-    
-    try:
-        # Salvar pedidos
-        if not df_pedidos.empty:
-            escrever_aba(nome_planilha, "Pedidos Shopify", df_pedidos)
-        
-        # Salvar clientes
-        if not df_clientes.empty:
-            escrever_aba(nome_planilha, "Clientes Shopify", df_clientes)
-        
-        return {
-            "status": "success",
-            "mensagem": "✅ Backup salvo no Google Sheets"
-        }
-    
-    except Exception as e:
-        return {
-            "status": "error",
-            "mensagem": f"❌ Erro ao salvar backup: {str(e)}"
-        }

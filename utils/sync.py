@@ -222,6 +222,18 @@ def sincronizar_shopify_com_planilha(
         # 🔒 GARANTIR CONTRATO DA ABA
         df_validos = df_validos[COLUNAS_PEDIDOS]
 
+        # ✅ GARANTIR ORDEM: MAIS ANTIGO → MAIS RECENTE
+        df_validos["Data de criação"] = pd.to_datetime(
+            df_validos["Data de criação"],
+            errors="coerce"
+        )
+
+        df_validos = df_validos.sort_values(
+            "Data de criação",
+            ascending=True
+        )
+
+        # 👉 INSERIR LOGO ABAIXO DO CABEÇALHO (LINHA 2)
         inserir_abaixo_cabecalho(
             nome_planilha,
             "Pedidos Shopify",

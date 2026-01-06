@@ -4,11 +4,7 @@ import streamlit as st
 import pandas as pd
 import time
 
-from utils.sync import (
-    sincronizar_shopify_completo,
-    sincronizar_shopify_incremental
-)
-
+from utils.sync import sincronizar_shopify_completo
 from utils.sheets import ler_aba
 from utils.classificacao import calcular_ciclo_medio
 
@@ -68,48 +64,37 @@ def carregar_clientes():
 # ======================================================
 st.subheader("🔄 Sincronização com Shopify")
 
-col1, col2 = st.columns(2)
+col_sync1, col_sync2 = st.columns([3, 1])
 
-# ==============================
-# ⚡ SINCRONIZAÇÃO INCREMENTAL
-# ==============================
-with col1:
-    if st.button(
-        "⚡ Sincronizar novos pedidos",
-        use_container_width=True,
-        type="primary"
-    ):
-        with st.spinner("Buscando apenas pedidos novos..."):
-            try:
-                resultado = sincronizar_shopify_incremental(
-                    nome_planilha=PLANILHA
-                )
-                st.success(resultado["mensagem"])
-                carregar_clientes.clear()
-                st.rerun()
-            except Exception as e:
-                st.error(f"❌ Erro na sincronização incremental: {str(e)}")
+with col_sync1:
+    st.caption(
+        "Sincroniza pedidos da Shopify, agrega clientes e atualiza a planilha. "
+        "Execute sempre que houver novos pedidos."
+    )
 
-# ==============================
-# 🧹 SINCRONIZAÇÃO COMPLETA
-# ==============================
-with col2:
-    if st.button(
-        "🧹 Sincronização completa (manutenção)",
-        use_container_width=True
-    ):
-        with st.spinner("Executando sincronização completa..."):
+with col_sync2:
+    if st.button("🔄 Sincronizar Agora", use_container_width=True, type="primary"):
+        with st.spinner("🔄 Sincronizando com Shopify..."):
             try:
                 resultado = sincronizar_shopify_completo(
                     nome_planilha=PLANILHA,
                     lote_tamanho=500
                 )
-                st.success(resultado["mensagem"])
-                carregar_clientes.clear()
-                st.rerun()
+                
+                if resultado["status"] == "success":
+                    st.success(resultado["mensagem"])
+                    # Limpar cache específico
+                    carregar_clientes.clear()
+                    st.rerun()  # Recarregar app automaticamente
+                elif resultado["status"] == "warning":
+                    st.warning(resultado["mensagem"])
+                else:
+                    st.error(resultado["mensagem"])
+                    
             except Exception as e:
-                st.error(f"❌ Erro na sincronização completa: {str(e)}")
+                st.error(f"❌ Erro na sincronização: {str(e)}")
 
+st.divider()
 
 
 # ======================================================

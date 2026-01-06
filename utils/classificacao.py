@@ -317,9 +317,23 @@ def calcular_estado(
     if df_clientes.empty:
         return df_clientes
     
+    # ✅ CORRIGIDO: Garantir que "Dias sem comprar" é numérico
+    if "Dias sem comprar" in df_clientes.columns:
+        df_clientes["Dias sem comprar"] = pd.to_numeric(
+            df_clientes["Dias sem comprar"],
+            errors="coerce"
+        ).fillna(0).astype(int)
+    
     def _classificar_estado(dias):
         if pd.isna(dias):
             return "🟢 Ativo"  # Fallback seguro
+        
+        # Converter para int (caso ainda seja string)
+        try:
+            dias = int(dias)
+        except (ValueError, TypeError):
+            return "🟢 Ativo"
+        
         if dias >= threshold_dormente:
             return "💤 Dormente"
         if dias >= threshold_risco:

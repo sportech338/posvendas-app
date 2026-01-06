@@ -4,7 +4,7 @@ import requests
 import streamlit as st
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta  # ✅ Adicionar timedelta
 from zoneinfo import ZoneInfo
 
 APP_TZ = ZoneInfo("America/Sao_Paulo")
@@ -34,9 +34,11 @@ def buscar_pedidos_pagos_direto(start_date=None, end_date=None, limit=250):
     Busca pedidos PAGOS diretamente da Shopify com CACHE.
     Atualiza automaticamente a cada 5 minutos.
     
+    ✅ PADRÃO: Busca apenas pedidos de ONTEM e HOJE
+    
     Args:
-        start_date: Data inicial (datetime.date) - padrão: 01/01/2023
-        end_date: Data final (datetime.date) - padrão: hoje
+        start_date: Data inicial (datetime.date) - padrão: ONTEM
+        end_date: Data final (datetime.date) - padrão: HOJE
         limit: Máximo de pedidos por página (máx 250)
     
     Returns:
@@ -59,12 +61,14 @@ def buscar_pedidos_pagos_direto(start_date=None, end_date=None, limit=250):
         "Content-Type": "application/json"
     }
     
-    # Definir período
+    # ✅ MUDANÇA: Definir período para ONTEM e HOJE
     hoje = datetime.now(APP_TZ).date()
+    ontem = hoje - timedelta(days=1)
+    
     if start_date is None:
-        start_date = datetime(2023, 1, 1).date()
+        start_date = ontem  # ✅ Começa de ONTEM
     if end_date is None:
-        end_date = hoje
+        end_date = hoje  # ✅ Até HOJE
     
     start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=APP_TZ)
     end_dt = datetime.combine(end_date, datetime.max.time(), tzinfo=APP_TZ)

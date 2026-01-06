@@ -107,7 +107,7 @@ except Exception as e:
     st.info("💡 Execute a sincronização primeiro para criar a aba 'Clientes Shopify'")
     st.stop()
     
-df["Ultimo Pedido"] = pd.to_datetime(df["Ultimo Pedido"], errors="coerce")
+df["Último Pedido"] = pd.to_datetime(df["Último Pedido"], errors="coerce")
 
 if df.empty:
     st.warning("⚠️ Nenhum cliente encontrado. Execute a sincronização primeiro.")
@@ -128,7 +128,7 @@ colunas_obrigatorias = [
     "Nível",
     "Qtd Pedidos", 
     "Valor Total", 
-    "Ultimo Pedido", 
+    "Último Pedido", 
     "Dias sem comprar"
 ]
 
@@ -240,7 +240,7 @@ COLUNAS_DISPLAY = [
     "Nível",
     "Qtd Pedidos",
     "Valor Total",
-    "Ultimo Pedido",
+    "Último Pedido",
     "Dias sem comprar"
 ]
 
@@ -254,7 +254,7 @@ def formatar_tabela(df_input: pd.DataFrame) -> pd.DataFrame:
     """
     Formata DataFrame para exibição:
     - Valor Total → formato brasileiro (R$ 1.234,56)
-    - Ultimo Pedido → data brasileira (dd/mm/yyyy)
+    - Último Pedido → data brasileira (dd/mm/yyyy)
     """
     df_display = df_input[COLUNAS_DISPLAY].copy()
     
@@ -264,8 +264,8 @@ def formatar_tabela(df_input: pd.DataFrame) -> pd.DataFrame:
     )
     
     # Formatar data (se for datetime)
-    if pd.api.types.is_datetime64_any_dtype(df_input["Ultimo Pedido"]):
-        df_display["Ultimo Pedido"] = df_input["Ultimo Pedido"].dt.strftime("%d/%m/%Y %H:%M")
+    if pd.api.types.is_datetime64_any_dtype(df_input["Último Pedido"]):
+        df_display["Último Pedido"] = df_input["Último Pedido"].dt.strftime("%d/%m/%Y %H:%M")
     
     return df_display
 
@@ -290,7 +290,7 @@ df_ativa = (
         (df["Estado"] == "🟢 Ativo") &
         (df["Nível"].isin(filtro_ativa))
     ]
-    .sort_values("Ultimo Pedido", ascending=False)
+    .sort_values("Último Pedido", ascending=False)
 )
 
 
@@ -331,7 +331,7 @@ df_risco = (
         (df["Estado"] == "🚨 Em risco") &
         (df["Nível"].isin(filtro_risco))
     ]
-    .sort_values("Ultimo Pedido", ascending=False)
+    .sort_values("Último Pedido", ascending=False)
 )
 
 
@@ -372,7 +372,7 @@ df_dormentes = (
         (df["Estado"] == "💤 Dormente") &
         (df["Nível"].isin(filtro_dormentes))
     ]
-    .sort_values("Ultimo Pedido", ascending=False)
+    .sort_values("Último Pedido", ascending=False)
 )
 
 

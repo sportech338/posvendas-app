@@ -133,11 +133,18 @@ def _reagregar_clientes(nome_planilha: str, resultado_pedidos: dict) -> dict:
             "mensagem": "⚠️ Nenhum pedido encontrado para agregação"
         }
 
-    df_pedidos["Data de criação"] = (
-        pd.to_datetime(df_pedidos["Data de criação"], errors="coerce", utc=True)
-        .dt.tz_convert("America/Sao_Paulo")
-        .dt.tz_localize(None)
+    df_pedidos["Data de criação"] = pd.to_datetime(
+        df_pedidos["Data de criação"],
+        errors="coerce"
     )
+
+    # se vier com timezone (ex: 2026-01-06T12:27:13-03:00), converte e remove tz
+    if df_pedidos["Data de criação"].dt.tz is not None:
+        df_pedidos["Data de criação"] = (
+            df_pedidos["Data de criação"]
+            .dt.tz_convert("America/Sao_Paulo")
+            .dt.tz_localize(None)
+        )
 
     df_clientes = agregar_por_cliente(df_pedidos)
     df_clientes = calcular_estado(df_clientes, 45, 90)

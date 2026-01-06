@@ -130,6 +130,27 @@ def sincronizar_incremental(nome_planilha: str = "Clientes Shopify") -> dict:
         .dt.tz_localize(None)
     )
     
+    # ✅ ADICIONAR: REORDENAR PEDIDOS (MAIS RECENTE NO TOPO)
+    df_pedidos = df_pedidos.sort_values(
+        "Data de criação",
+        ascending=False  # Mais recente primeiro
+    ).reset_index(drop=True)
+    
+    # ✅ ADICIONAR: SOBRESCREVER ABA DE PEDIDOS ORDENADA
+    try:
+        escrever_aba(
+            planilha=nome_planilha,
+            aba="Pedidos Shopify",
+            df=df_pedidos
+        )
+    except Exception as e:
+        return {
+            "status": "error",
+            "mensagem": f"❌ Erro ao reordenar pedidos: {str(e)}",
+            "novos_pedidos": total_novos,
+            "total_clientes": 0
+        }
+    
     # ==================================================
     # 8. AGREGAR CLIENTES
     # ==================================================
@@ -268,7 +289,7 @@ def carregar_dados_planilha(nome_planilha: str = "Clientes Shopify") -> pd.DataF
                 errors="coerce"
             )
         
-        # ✅ CORRIGIDO: Converter colunas numéricas
+        # Converter colunas numéricas
         if "Dias sem comprar" in df_clientes.columns:
             df_clientes["Dias sem comprar"] = pd.to_numeric(
                 df_clientes["Dias sem comprar"],
@@ -299,16 +320,6 @@ def carregar_dados_planilha(nome_planilha: str = "Clientes Shopify") -> pd.DataF
 def calcular_estatisticas(df_clientes: pd.DataFrame) -> dict:
     """
     Calcula estatísticas da base de clientes.
-    
-    Args:
-        df_clientes: DataFrame com clientes agregados
-    
-    Returns:
-        dict: Estatísticas completas
-    
-    Exemplo:
-        >>> stats = calcular_estatisticas(df_clientes)
-        >>> print(f"Total: {stats['total_clientes']}")
     """
     
     if df_clientes.empty:
@@ -325,18 +336,15 @@ def calcular_estatisticas(df_clientes: pd.DataFrame) -> dict:
             "dormentes": 0
         }
     
-    # Métricas gerais
     total_clientes = len(df_clientes)
     faturamento_total = float(df_clientes["Valor Total"].sum())
     ticket_medio = faturamento_total / total_clientes if total_clientes > 0 else 0.0
     
-    # Por nível
     total_campeoes = len(df_clientes[df_clientes["Nível"] == "Campeão"])
     total_leais = len(df_clientes[df_clientes["Nível"] == "Leal"])
     total_promissores = len(df_clientes[df_clientes["Nível"] == "Promissor"])
     total_novos = len(df_clientes[df_clientes["Nível"] == "Novo"])
     
-    # Por estado
     total_ativos = len(df_clientes[df_clientes["Estado"] == "🟢 Ativo"])
     total_risco = len(df_clientes[df_clientes["Estado"] == "🚨 Em risco"])
     total_dormentes = len(df_clientes[df_clientes["Estado"] == "💤 Dormente"])

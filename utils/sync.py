@@ -98,7 +98,7 @@ def _reagregar_clientes(nome_planilha: str, resultado_pedidos: dict) -> dict:
     )
 
     df_clientes = agregar_por_cliente(df_pedidos)
-    df_clientes = calcular_estado(df_clientes, 45, 90)
+    df_clientes = calcular_estado(df_clientes, 60, 120)
 
     escrever_aba(
         planilha=nome_planilha,

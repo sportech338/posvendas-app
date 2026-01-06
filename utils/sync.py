@@ -9,7 +9,8 @@ from utils.sheets import (
     append_aba,
     ler_ids_existentes,
     ler_aba,
-    escrever_aba
+    escrever_aba,
+    inserir_abaixo_cabecalho
 )
 from utils.classificacao import agregar_por_cliente, calcular_estado
 
@@ -220,8 +221,6 @@ def sincronizar_shopify_com_planilha(
 
         # 🔒 GARANTIR CONTRATO DA ABA
         df_validos = df_validos[COLUNAS_PEDIDOS]
-
-        from utils.sheets import inserir_abaixo_cabecalho
 
         inserir_abaixo_cabecalho(
             nome_planilha,

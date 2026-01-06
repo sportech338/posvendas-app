@@ -3,8 +3,7 @@
 import streamlit as st
 import pandas as pd
 
-from utils.sync import sincronizar_shopify_completo
-from utils.sheets import ler_aba
+from utils.sync import carregar_dados_shopify, calcular_estatisticas
 from utils.classificacao import calcular_ciclo_medio
 
 
@@ -19,68 +18,40 @@ st.set_page_config(
 )
 
 st.title("📦 Pós-vendas SporTech")
-st.caption("Shopify → Google Sheets → Dashboard de Clientes")
+st.caption("Shopify → Cache Automático → Dashboard de Clientes")
 st.divider()
 
 
 # ======================================================
-# CONSTANTES
-# ======================================================
-PLANILHA = "Clientes Shopify"
-ABA_CLIENTES = "Clientes Shopify"
-ABA_PEDIDOS = "Pedidos Shopify"
-
-
-# ======================================================
-# 📦 CARREGAMENTO DOS CLIENTES (JÁ AGREGADOS)
+# 📦 CARREGAMENTO AUTOMÁTICO (COM CACHE DE 5 MIN)
 # ======================================================
 @st.cache_data(ttl=300)
-def carregar_clientes():
+def carregar_dados():
     """
-    Carrega dados JÁ AGREGADOS da aba 'Clientes Shopify'.
+    Carrega pedidos e clientes DIRETO da Shopify.
     
-    Não precisa processar pedidos individualmente, pois a sincronização
-    já fez a agregação e salvou na planilha.
-    
-    TTL: 5 minutos (300 segundos)
+    Cache: 5 minutos (atualização automática)
     """
-    return ler_aba(PLANILHA, ABA_CLIENTES)
+    return carregar_dados_shopify()
 
 
 # ======================================================
-# 🔄 SINCRONIZAÇÃO SHOPIFY
+# 🔄 BOTÃO DE ATUALIZAÇÃO MANUAL
 # ======================================================
-st.subheader("🔄 Sincronização com Shopify")
+st.subheader("🔄 Atualização de Dados")
 
-col_sync1, col_sync2 = st.columns([3, 1])
+col_info, col_btn = st.columns([3, 1])
 
-with col_sync1:
+with col_info:
     st.caption(
-        "Sincroniza pedidos da Shopify, agrega clientes e atualiza a planilha. "
-        "Execute sempre que houver novos pedidos."
+        "✨ **Dados atualizados automaticamente a cada 5 minutos**  \n"
+        "Use o botão ao lado apenas se precisar atualizar imediatamente."
     )
 
-with col_sync2:
-    if st.button("🔄 Sincronizar Agora", use_container_width=True, type="primary"):
-        with st.spinner("🔄 Sincronizando com Shopify..."):
-            try:
-                resultado = sincronizar_shopify_completo(
-                    nome_planilha=PLANILHA,
-                    lote_tamanho=500
-                )
-                
-                if resultado["status"] == "success":
-                    st.success(resultado["mensagem"])
-                    # Limpar cache específico
-                    carregar_clientes.clear()
-                    st.rerun()  # Recarregar app automaticamente
-                elif resultado["status"] == "warning":
-                    st.warning(resultado["mensagem"])
-                else:
-                    st.error(resultado["mensagem"])
-                    
-            except Exception as e:
-                st.error(f"❌ Erro na sincronização: {str(e)}")
+with col_btn:
+    if st.button("🔄 Atualizar Agora", use_container_width=True, type="primary"):
+        carregar_dados.clear()
+        st.rerun()
 
 st.divider()
 
@@ -89,40 +60,16 @@ st.divider()
 # CARREGAR DADOS
 # ======================================================
 try:
-    df = carregar_clientes()
+    with st.spinner("🔄 Carregando dados da Shopify..."):
+        df_pedidos, df_clientes = carregar_dados()
 except Exception as e:
     st.error(f"❌ Erro ao carregar dados: {str(e)}")
-    st.info("💡 Execute a sincronização primeiro para criar a aba 'Clientes Shopify'")
+    st.info("💡 Verifique suas credenciais da Shopify em `.streamlit/secrets.toml`")
     st.stop()
 
-if df.empty:
-    st.warning("⚠️ Nenhum cliente encontrado. Execute a sincronização primeiro.")
-    st.stop()
-
-
-# ======================================================
-# 🔧 NORMALIZAÇÃO DE COLUNAS
-# ======================================================
-df.columns = df.columns.str.strip()
-
-# Validar colunas obrigatórias (AGORA USA "Nível")
-colunas_obrigatorias = [
-    "Customer ID",
-    "Cliente", 
-    "Email", 
-    "Estado", 
-    "Nível",
-    "Qtd Pedidos", 
-    "Valor Total", 
-    "Ultimo Pedido", 
-    "Dias sem comprar"
-]
-
-colunas_faltantes = set(colunas_obrigatorias) - set(df.columns)
-
-if colunas_faltantes:
-    st.error(f"❌ Colunas faltantes na planilha: {', '.join(colunas_faltantes)}")
-    st.info("💡 Execute a sincronização completa para corrigir a estrutura da planilha")
+if df_clientes.empty:
+    st.warning("⚠️ Nenhum cliente encontrado na Shopify.")
+    st.info("💡 Verifique se há pedidos pagos na sua loja.")
     st.stop()
 
 
@@ -133,7 +80,7 @@ with st.expander("📊 Análise de Ciclo de Compra — Ajustar Thresholds", expa
     st.write("### Validação dos critérios de classificação")
     
     try:
-        ciclo = calcular_ciclo_medio(df)
+        ciclo = calcular_ciclo_medio(df_clientes)
         
         if ciclo["total_recorrentes"] >= 5:
             col1, col2 = st.columns(2)
@@ -176,7 +123,7 @@ with st.expander("📊 Análise de Ciclo de Compra — Ajustar Thresholds", expa
             
             st.info(
                 f"📌 **Atualmente usando:** Ativo < 45 dias | Em Risco 45-90 dias | Dormente > 90 dias\n\n"
-                f"💡 Para ajustar, modifique os thresholds em `utils/sync.py` na função `sincronizar_shopify_completo()`"
+                f"💡 Para ajustar, modifique os thresholds em `utils/sync.py` na função `carregar_dados_shopify()`"
             )
         else:
             st.warning(
@@ -194,30 +141,30 @@ st.divider()
 
 
 # ======================================================
-# 📈 MÉTRICAS TOPO (AGORA USA "Nível")
+# 📈 MÉTRICAS TOPO
 # ======================================================
+stats = calcular_estatisticas(df_clientes)
+
 col1, col2, col3, col4 = st.columns(4)
 
-total_clientes = len(df)
-faturamento_total = df["Valor Total"].sum()
-total_campeoes = len(df[df["Nível"] == "Campeão"])
-total_em_risco = len(df[df["Estado"] == "🚨 Em risco"])
-
-col1.metric("👥 Total de clientes", f"{total_clientes:,}".replace(",", "."))
+col1.metric(
+    "👥 Total de clientes", 
+    f"{stats['total_clientes']:,}".replace(",", ".")
+)
 
 col2.metric(
     "💰 Faturamento total",
-    f"R$ {faturamento_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    f"R$ {stats['faturamento_total']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 )
 
-col3.metric("🏆 Campeões", total_campeoes)
-col4.metric("🚨 Em risco", total_em_risco)
+col3.metric("🏆 Campeões", stats['campeoes'])
+col4.metric("🚨 Em risco", stats['em_risco'])
 
 st.divider()
 
 
 # ======================================================
-# 📋 CONFIGURAÇÃO DAS TABELAS (AGORA USA "Nível")
+# 📋 CONFIGURAÇÃO DAS TABELAS
 # ======================================================
 COLUNAS_DISPLAY = [
     "Cliente",
@@ -242,6 +189,9 @@ def formatar_tabela(df_input: pd.DataFrame) -> pd.DataFrame:
     - Valor Total → formato brasileiro (R$ 1.234,56)
     - Ultimo Pedido → data brasileira (dd/mm/yyyy)
     """
+    if df_input.empty:
+        return pd.DataFrame(columns=COLUNAS_DISPLAY)
+    
     df_display = df_input[COLUNAS_DISPLAY].copy()
     
     # Formatar valor monetário
@@ -249,7 +199,7 @@ def formatar_tabela(df_input: pd.DataFrame) -> pd.DataFrame:
         lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     )
     
-    # Formatar data (se for datetime)
+    # Formatar data
     if pd.api.types.is_datetime64_any_dtype(df_input["Ultimo Pedido"]):
         df_display["Ultimo Pedido"] = df_input["Ultimo Pedido"].dt.strftime("%d/%m/%Y %H:%M")
     
@@ -257,7 +207,7 @@ def formatar_tabela(df_input: pd.DataFrame) -> pd.DataFrame:
 
 
 # ======================================================
-# 🟢 BASE ATIVA (AGORA USA "Nível")
+# 🟢 BASE ATIVA
 # ======================================================
 st.subheader("🟢 Base ativa")
 
@@ -271,9 +221,9 @@ with col_filtro1:
         key="filtro_ativa"
     )
 
-df_ativa = df[
-    (df["Estado"] == "🟢 Ativo") &
-    (df["Nível"].isin(filtro_ativa))
+df_ativa = df_clientes[
+    (df_clientes["Estado"] == "🟢 Ativo") &
+    (df_clientes["Nível"].isin(filtro_ativa))
 ].sort_values(
     ["Valor Total", "Ultimo Pedido"],
     ascending=[False, False]
@@ -297,7 +247,7 @@ st.divider()
 
 
 # ======================================================
-# 🚨 EM RISCO (AGORA USA "Nível")
+# 🚨 EM RISCO
 # ======================================================
 st.subheader("🚨 Em risco — ação imediata")
 
@@ -311,9 +261,9 @@ with col_filtro2:
         key="filtro_risco"
     )
 
-df_risco = df[
-    (df["Estado"] == "🚨 Em risco") &
-    (df["Nível"].isin(filtro_risco))
+df_risco = df_clientes[
+    (df_clientes["Estado"] == "🚨 Em risco") &
+    (df_clientes["Nível"].isin(filtro_risco))
 ].sort_values(
     ["Dias sem comprar", "Valor Total"],
     ascending=[False, False]
@@ -337,7 +287,7 @@ st.divider()
 
 
 # ======================================================
-# 💤 DORMENTES (AGORA USA "Nível")
+# 💤 DORMENTES
 # ======================================================
 st.subheader("💤 Dormentes — reativação")
 
@@ -351,9 +301,9 @@ with col_filtro3:
         key="filtro_dormentes"
     )
 
-df_dormentes = df[
-    (df["Estado"] == "💤 Dormente") &
-    (df["Nível"].isin(filtro_dormentes))
+df_dormentes = df_clientes[
+    (df_clientes["Estado"] == "💤 Dormente") &
+    (df_clientes["Nível"].isin(filtro_dormentes))
 ].sort_values(
     ["Dias sem comprar"],
     ascending=False
@@ -379,7 +329,7 @@ else:
 # ======================================================
 st.divider()
 st.caption(
-    f"🔄 Cache: 5 minutos | "
-    f"📅 Última atualização: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M:%S')} | "
-    f"📊 Total de registros: {len(df)}"
+    f"🔄 Atualização automática: 5 minutos | "
+    f"📅 Última carga: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M:%S')} | "
+    f"📊 Total de registros: {len(df_clientes)}"
 )

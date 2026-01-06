@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 
-from utils.sync import carregar_dados_shopify, calcular_estatisticas
+from utils.sync import sincronizar_incremental, carregar_dados_planilha, calcular_estatisticas
 from utils.classificacao import calcular_ciclo_medio
 
 
@@ -18,39 +18,46 @@ st.set_page_config(
 )
 
 st.title("📦 Pós-vendas SporTech")
-st.caption("Shopify → Cache Automático → Dashboard de Clientes")
+st.caption("Shopify → Google Sheets → Dashboard atualizado automaticamente")
 st.divider()
 
 
 # ======================================================
-# 📦 CARREGAMENTO AUTOMÁTICO (COM CACHE DE 5 MIN)
+# 📦 CARREGAMENTO COM AUTO-SYNC
 # ======================================================
 @st.cache_data(ttl=300)
-def carregar_dados():
+def carregar_dados_com_sync():
     """
-    Carrega pedidos e clientes DIRETO da Shopify.
+    Carrega dados COM sincronização automática a cada 5 min.
     
-    Cache: 5 minutos (atualização automática)
+    1. Sincroniza (adiciona novos pedidos)
+    2. Carrega da planilha (instantâneo)
     """
-    return carregar_dados_shopify()
+    # Sincronizar primeiro
+    resultado = sincronizar_incremental()
+    
+    # Carregar da planilha
+    df_clientes = carregar_dados_planilha()
+    
+    return df_clientes, resultado
 
 
 # ======================================================
-# 🔄 BOTÃO DE ATUALIZAÇÃO MANUAL
+# 🔄 BOTÃO DE SINCRONIZAÇÃO MANUAL
 # ======================================================
-st.subheader("🔄 Atualização de Dados")
+st.subheader("🔄 Sincronização com Shopify")
 
 col_info, col_btn = st.columns([3, 1])
 
 with col_info:
     st.caption(
-        "✨ **Dados atualizados automaticamente a cada 5 minutos**  \n"
-        "Use o botão ao lado apenas se precisar atualizar imediatamente."
+        "✨ **Sincronização automática a cada 5 minutos**  \n"
+        "Detecta e adiciona novos pedidos automaticamente!"
     )
 
 with col_btn:
-    if st.button("🔄 Atualizar Agora", use_container_width=True, type="primary"):
-        carregar_dados.clear()
+    if st.button("🔄 Sincronizar Agora", use_container_width=True, type="primary"):
+        carregar_dados_com_sync.clear()
         st.rerun()
 
 st.divider()
@@ -60,16 +67,20 @@ st.divider()
 # CARREGAR DADOS
 # ======================================================
 try:
-    with st.spinner("🔄 Carregando dados da Shopify..."):
-        df_pedidos, df_clientes = carregar_dados()
+    with st.spinner("🔄 Sincronizando com Shopify..."):
+        df_clientes, resultado_sync = carregar_dados_com_sync()
+        
+        # Mostrar resultado da sincronização
+        if resultado_sync.get("novos_pedidos", 0) > 0:
+            st.success(f"🆕 {resultado_sync['novos_pedidos']} novos pedidos encontrados!")
+        
 except Exception as e:
     st.error(f"❌ Erro ao carregar dados: {str(e)}")
-    st.info("💡 Verifique suas credenciais da Shopify em `.streamlit/secrets.toml`")
+    st.info("💡 Execute a primeira sincronização para criar as abas necessárias")
     st.stop()
 
 if df_clientes.empty:
-    st.warning("⚠️ Nenhum cliente encontrado na Shopify.")
-    st.info("💡 Verifique se há pedidos pagos na sua loja.")
+    st.warning("⚠️ Nenhum cliente encontrado.")
     st.stop()
 
 
@@ -123,7 +134,7 @@ with st.expander("📊 Análise de Ciclo de Compra — Ajustar Thresholds", expa
             
             st.info(
                 f"📌 **Atualmente usando:** Ativo < 45 dias | Em Risco 45-90 dias | Dormente > 90 dias\n\n"
-                f"💡 Para ajustar, modifique os thresholds em `utils/sync.py` na função `carregar_dados_shopify()`"
+                f"💡 Para ajustar, modifique os thresholds em `utils/sync.py` na função `sincronizar_incremental()`"
             )
         else:
             st.warning(

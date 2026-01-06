@@ -170,6 +170,8 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     # ======================================================
     df_clientes = df_clientes.reset_index(drop=True)
     
+    df_clientes = calcular_estado(df_clientes)
+    
     return df_clientes
 
 
@@ -177,43 +179,18 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
 # CLASSIFICAÇÃO RFM (Recency, Frequency, Monetary)
 # ======================================================
 def _calcular_classificacao(row) -> str:
-    """
-    Classifica cliente baseado em RFM (Recency, Frequency, Monetary).
-    
-    Critérios:
-    - Campeão: (5+ pedidos OU R$ 5.000+) E ativo há < 60 dias
-    - Leal: (3+ pedidos OU R$ 2.000+) E ativo há < 90 dias
-    - Promissor: (2+ pedidos OU R$ 500+) E ativo há < 120 dias
-    - Iniciante: 1 pedido e ativo há < 90 dias
-    
-    Args:
-        row: Linha do DataFrame com as colunas:
-             "Qtd Pedidos", "Valor Total", "Dias sem comprar"
-    
-    Returns:
-        str: "Campeão", "Leal", "Promissor" ou "Novo"
-    """
     qtd = row["Qtd Pedidos"]
     valor = row["Valor Total"]
-    dias = row["Dias sem comprar"]
-    
-    # 🏆 CAMPEÃO: Alto valor + frequência + comprou recentemente
-    if (qtd >= 5 or valor >= 5000) and dias < 60:
+
+    if qtd >= 5 or valor >= 700:
         return "Campeão"
-    
-    # 💙 LEAL: Compra regularmente com bom valor
-    if (qtd >= 3 or valor >= 2000) and dias < 90:
+
+    if qtd >= 3 or valor >= 500:
         return "Leal"
-    
-    # ⭐ PROMISSOR: Mostra potencial (2+ compras ou ticket alto)
-    if (qtd >= 2 or valor >= 500) and dias < 120:
+
+    if qtd >= 2 or valor >= 300:
         return "Promissor"
-    
-    # 🆕 NOVO: Primeira compra recente
-    if qtd == 1 and dias < 90:
-        return "Iniciante"
-    
-    # Fallback: classificar como Novo
+
     return "Iniciante"
 
 
@@ -248,9 +225,9 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         return {
             "ciclo_mediana": None,
             "ciclo_media": None,
-            "threshold_ativo": 45,
-            "threshold_risco": 90,
-            "threshold_dormente": 90,
+            "threshold_ativo": 60,
+            "threshold_risco": 120,
+            "threshold_dormente": 120,
             "total_recorrentes": 0
         }
 
@@ -276,9 +253,9 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         return {
             "ciclo_mediana": None,
             "ciclo_media": None,
-            "threshold_ativo": 45,
-            "threshold_risco": 90,
-            "threshold_dormente": 90,
+            "threshold_ativo": 60,
+            "threshold_risco": 120,
+            "threshold_dormente": 120,
             "total_recorrentes": len(clientes_recorrentes)
         }
     
@@ -303,9 +280,9 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         return {
             "ciclo_mediana": None,
             "ciclo_media": None,
-            "threshold_ativo": 45,
-            "threshold_risco": 90,
-            "threshold_dormente": 90,
+            "threshold_ativo": 60,
+            "threshold_risco": 120,
+            "threshold_dormente": 120,
             "total_recorrentes": 0
         }
     
@@ -332,8 +309,8 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
 # ======================================================
 def calcular_estado(
     df_clientes: pd.DataFrame,
-    threshold_risco: int = 45,
-    threshold_dormente: int = 90
+    threshold_risco: int = 60,
+    threshold_dormente: int = 120
 ) -> pd.DataFrame:
     """
     Adiciona coluna "Estado" ao DataFrame de clientes
@@ -341,8 +318,8 @@ def calcular_estado(
     
     Args:
         df_clientes: DataFrame com clientes
-        threshold_risco: Dias para classificar como "Em risco" (padrão: 45)
-        threshold_dormente: Dias para classificar como "Dormente" (padrão: 90)
+        threshold_risco: Dias para classificar como "Em risco" (padrão: 60)
+        threshold_dormente: Dias para classificar como "Dormente" (padrão: 120)
     
     Returns:
         pd.DataFrame: DataFrame original com coluna "Estado" adicionada

@@ -18,6 +18,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+st.autorefresh(interval=600_000, key="auto_refresh")  # 10 minutos
+
 st.title("📦 Pós-vendas SporTech")
 st.caption("Shopify → Google Sheets → Dashboard de Clientes")
 st.divider()

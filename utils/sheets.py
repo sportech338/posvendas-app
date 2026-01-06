@@ -399,11 +399,12 @@ def inserir_abaixo_cabecalho(planilha: str, aba: str, df: pd.DataFrame):
         ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
         ws.append_row(df.columns.tolist())
 
-    # Quantidade de linhas novas
     qtd_linhas = len(df)
+    qtd_colunas = df.shape[1]
 
-    # 👉 INSERE LINHAS VAZIAS NA LINHA 2
-    ws.insert_rows(row=2, number=qtd_linhas)
+    # ✅ gspread exige lista de linhas
+    linhas_vazias = [[""] * qtd_colunas for _ in range(qtd_linhas)]
+    ws.insert_rows(linhas_vazias, row=2)
 
     # Preparar valores
     valores = []
@@ -420,4 +421,3 @@ def inserir_abaixo_cabecalho(planilha: str, aba: str, df: pd.DataFrame):
 
     # 👉 ESCREVE OS DADOS A PARTIR DA LINHA 2
     ws.update("A2", valores, value_input_option="USER_ENTERED")
-

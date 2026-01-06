@@ -58,6 +58,12 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     # ======================================================
     df_pedidos = df_pedidos.copy()  # Evitar SettingWithCopyWarning
     
+    # ✅ ADICIONAR: Converter Valor Total para float ANTES da agregação
+    df_pedidos["Valor Total"] = pd.to_numeric(
+        df_pedidos["Valor Total"],
+        errors="coerce"
+    ).fillna(0)
+    
     df_pedidos["cliente_key"] = (
         df_pedidos["Customer ID"]
         .astype(str)
@@ -100,6 +106,10 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         "Ultimo_Pedido": "Ultimo Pedido",
     })
     
+    # ✅ ADICIONAR: Garantir tipos corretos antes da classificação
+    df_clientes["Qtd Pedidos"] = df_clientes["Qtd Pedidos"].astype(int)
+    df_clientes["Valor Total"] = df_clientes["Valor Total"].astype(float)
+    
     # ======================================================
     # 3. CALCULAR DIAS SEM COMPRAR
     # ======================================================
@@ -107,7 +117,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     df_clientes["Dias sem comprar"] = (hoje - df_clientes["Ultimo Pedido"]).dt.days
     
     # Garantir que não há valores negativos (edge case)
-    df_clientes["Dias sem comprar"] = df_clientes["Dias sem comprar"].clip(lower=0)
+    df_clientes["Dias sem comprar"] = df_clientes["Dias sem comprar"].clip(lower=0).astype(int)
     
     # ======================================================
     # 4. CLASSIFICAR CLIENTES (COLUNA "Nível")
@@ -170,9 +180,21 @@ def _calcular_classificacao(row) -> str:
     Returns:
         str: "Campeão", "Leal", "Promissor" ou "Novo"
     """
-    qtd = row["Qtd Pedidos"]
-    valor = row["Valor Total"]
-    dias = row["Dias sem comprar"]
+    # ✅ CORRIGIDO: Converter para tipos corretos com tratamento de erro
+    try:
+        qtd = int(row["Qtd Pedidos"])
+    except (ValueError, TypeError):
+        qtd = 0
+    
+    try:
+        valor = float(row["Valor Total"])
+    except (ValueError, TypeError):
+        valor = 0.0
+    
+    try:
+        dias = int(row["Dias sem comprar"])
+    except (ValueError, TypeError):
+        dias = 0
     
     # 🏆 CAMPEÃO: Alto valor + frequência + comprou recentemente
     if (qtd >= 5 or valor >= 5000) and dias < 60:

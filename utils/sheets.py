@@ -76,7 +76,46 @@ def abrir_planilha(nome_planilha: str):
 
 
 # ======================================================
-# LEITURA (SANITIZADA)
+# CONVERSÃO DE VALORES BR → FLOAT
+# ======================================================
+def _converter_valor_br_para_float(serie: pd.Series) -> pd.Series:
+    """
+    Converte valores em formato brasileiro (R$ 1.234,56) para float.
+    
+    Transformações aplicadas:
+    - Remove "R$"
+    - Remove espaços
+    - Remove ponto (separador de milhar)
+    - Troca vírgula por ponto (decimal)
+    - Converte para numérico
+    - Preenche NaN com 0
+    
+    Args:
+        serie: Pandas Series com valores formatados
+    
+    Returns:
+        pd.Series: Série com valores float
+    
+    Exemplos:
+        "R$ 1.234,56" → 1234.56
+        "96,90" → 96.90
+        "R$ 5.000,00" → 5000.00
+    """
+    return (
+        serie
+        .astype(str)
+        .str.replace("R$", "", regex=False)
+        .str.replace(" ", "", regex=False)
+        .str.replace(".", "", regex=False)   # Remove separador de milhar
+        .str.replace(",", ".", regex=False)  # Vírgula → ponto decimal
+        .str.strip()
+        .pipe(pd.to_numeric, errors="coerce")
+        .fillna(0)
+    )
+
+
+# ======================================================
+# LEITURA (SANITIZADA E COM CONVERSÃO AUTOMÁTICA)
 # ======================================================
 def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
     """
@@ -84,6 +123,7 @@ def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
     
     Processamento automático:
     ✅ Remove caracteres invisíveis (NBSP, etc)
+    ✅ Converte coluna "Valor Total" para float (se existir)
     ✅ Faz trim em todas as strings
     
     Args:
@@ -111,7 +151,7 @@ def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
     if df.empty:
         return df
 
-    # Limpar strings invisíveis
+    # 🔒 Limpar strings invisíveis que quebram parsing
     for col in df.select_dtypes(include="object").columns:
         df[col] = (
             df[col]
@@ -120,6 +160,10 @@ def ler_aba(planilha: str, aba: str) -> pd.DataFrame:
             .str.replace("\u200b", "", regex=False)  # Zero-width space
             .str.strip()
         )
+    
+    # ✅ Conversão automática de valores monetários
+    if "Valor Total" in df.columns:
+        df["Valor Total"] = _converter_valor_br_para_float(df["Valor Total"])
 
     return df
 
@@ -229,7 +273,7 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
         # Adicionar cabeçalho
         ws.append_row(df.columns.tolist())
 
-    # Converter DataFrame para lista preservando tipos
+    # ✅ Converter DataFrame para lista preservando tipos
     valores = []
     for _, row in df.iterrows():
         linha = []
@@ -286,7 +330,7 @@ def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
     # Limpar conteúdo anterior
     ws.clear()
     
-    # Preparar dados (cabeçalho + linhas)
+    # ✅ Preparar dados (cabeçalho + linhas)
     valores = [df.columns.tolist()]
     
     for _, row in df.iterrows():
@@ -308,3 +352,29 @@ def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
         valores,
         value_input_option="USER_ENTERED"
     )
+
+
+# ======================================================
+# VERIFICAR SE ABA EXISTE
+# ======================================================
+def aba_existe(planilha: str, aba: str) -> bool:
+    """
+    Verifica se uma aba existe na planilha.
+    
+    Args:
+        planilha: Nome da planilha
+        aba: Nome da aba para verificar
+    
+    Returns:
+        bool: True se aba existe, False caso contrário
+    
+    Exemplo:
+        >>> if not aba_existe("Clientes Shopify", "Registro Ações"):
+        >>>     criar_aba_registro()
+    """
+    try:
+        sh = abrir_planilha(planilha)
+        sh.worksheet(aba)
+        return True
+    except gspread.WorksheetNotFound:
+        return False

@@ -211,10 +211,10 @@ def _calcular_classificacao(row) -> str:
     
     # 🆕 NOVO: Primeira compra recente
     if qtd == 1 and dias < 90:
-        return "Novo"
+        return "Iniciante"
     
     # Fallback: classificar como Novo
-    return "Novo"
+    return "Iniciante"
 
 
 # ======================================================

@@ -2,6 +2,7 @@
 
 import streamlit as st
 import pandas as pd
+import time
 
 from utils.sync import sincronizar_shopify_completo
 from utils.sheets import ler_aba
@@ -18,7 +19,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.autorefresh(interval=600_000, key="auto_refresh")  # 10 minutos
+# ==============================
+# AUTO-REFRESH A CADA 10 MIN
+# ==============================
+if "last_refresh" not in st.session_state:
+    st.session_state.last_refresh = time.time()
+
+if time.time() - st.session_state.last_refresh > 600:
+    st.session_state.last_refresh = time.time()
+    st.rerun()
+
 
 st.title("📦 Pós-vendas SporTech")
 st.caption("Shopify → Google Sheets → Dashboard de Clientes")

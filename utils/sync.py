@@ -15,6 +15,20 @@ from utils.classificacao import agregar_por_cliente, calcular_estado
 
 
 # ======================================================
+# 🔒 CONTRATO FIXO DAS ABAS DE PEDIDOS
+# ======================================================
+COLUNAS_PEDIDOS = [
+    "Pedido ID",
+    "Data de criação",
+    "Customer ID",
+    "Cliente",
+    "Email",
+    "Valor Total",
+    "Pedido"
+]
+
+
+# ======================================================
 # UTIL — DATA DE INÍCIO (ONTEM 00:00)
 # ======================================================
 def _data_inicio_ontem() -> str:
@@ -43,7 +57,7 @@ def sincronizar_shopify_completo(
 
 
 # ======================================================
-# SINCRONIZAÇÃO INCREMENTAL (CACHE / 10 MIN)
+# SINCRONIZAÇÃO INCREMENTAL
 # ======================================================
 def sincronizar_shopify_incremental(
     nome_planilha: str = "Clientes Shopify"
@@ -122,9 +136,17 @@ def sincronizar_shopify_com_planilha(
         if df.empty:
             continue
 
-        df["Pedido ID"] = df["Pedido ID"].astype(str).str.replace(".0", "").str.strip()
+        # Normalizar ID
+        df["Pedido ID"] = (
+            df["Pedido ID"]
+            .astype(str)
+            .str.replace(".0", "", regex=False)
+            .str.strip()
+        )
 
-        # Cancelados / reembolsados
+        # ==================================================
+        # 🚫 CANCELADOS / REEMBOLSADOS
+        # ==================================================
         df_cancelados = df[
             (df.get("Cancelled At").notna()) |
             (df.get("Total Refunded", 0) >= df.get("Valor Total", 0))
@@ -135,11 +157,14 @@ def sincronizar_shopify_com_planilha(
         ]
 
         if not df_cancelados.empty:
+            df_cancelados = df_cancelados[COLUNAS_PEDIDOS]
             append_aba(nome_planilha, "Pedidos Ignorados", df_cancelados)
             ids_ignorados.update(df_cancelados["Pedido ID"])
             total_ignorados += len(df_cancelados)
 
-        # Válidos
+        # ==================================================
+        # ✅ PEDIDOS VÁLIDOS
+        # ==================================================
         df_validos = df[
             (df.get("Cancelled At").isna()) &
             (df.get("Total Refunded", 0) < df.get("Valor Total", 0))
@@ -151,6 +176,9 @@ def sincronizar_shopify_com_planilha(
 
         if df_validos.empty:
             continue
+
+        # 🔒 GARANTIR CONTRATO DA ABA
+        df_validos = df_validos[COLUNAS_PEDIDOS]
 
         append_aba(nome_planilha, "Pedidos Shopify", df_validos)
         ids_pedidos.update(df_validos["Pedido ID"])

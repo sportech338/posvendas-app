@@ -489,7 +489,7 @@ def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> Dict:
         "total_campeoes": contagem_nivel.get("Campeão", 0),
         "total_leais": contagem_nivel.get("Leal", 0),
         "total_promissores": contagem_nivel.get("Promissor", 0),
-        "total_novos": contagem_nivel.get("Novo", 0),
+        "total_iniciantes": contagem_nivel.get("Iniciante", 0),
         "total_ativos": contagem_estado.get("🟢 Ativo", 0),
         "total_em_risco": contagem_estado.get("🚨 Em risco", 0),
         "total_dormentes": contagem_estado.get("💤 Dormente", 0)

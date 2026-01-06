@@ -106,6 +106,8 @@ except Exception as e:
     st.error(f"❌ Erro ao carregar dados: {str(e)}")
     st.info("💡 Execute a sincronização primeiro para criar a aba 'Clientes Shopify'")
     st.stop()
+    
+df["Ultimo Pedido"] = pd.to_datetime(df["Ultimo Pedido"], errors="coerce")
 
 if df.empty:
     st.warning("⚠️ Nenhum cliente encontrado. Execute a sincronização primeiro.")
@@ -283,13 +285,14 @@ with col_filtro1:
         key="filtro_ativa"
     )
 
-df_ativa = df[
-    (df["Estado"] == "🟢 Ativo") &
-    (df["Nível"].isin(filtro_ativa))
-].sort_values(
-    ["Valor Total", "Ultimo Pedido"],
-    ascending=[False, False]
+df_ativa = (
+    df[
+        (df["Estado"] == "🟢 Ativo") &
+        (df["Nível"].isin(filtro_ativa))
+    ]
+    .sort_values("Ultimo Pedido", ascending=False)
 )
+
 
 with col_info1:
     st.metric("Total", len(df_ativa))
@@ -323,13 +326,14 @@ with col_filtro2:
         key="filtro_risco"
     )
 
-df_risco = df[
-    (df["Estado"] == "🚨 Em risco") &
-    (df["Nível"].isin(filtro_risco))
-].sort_values(
-    ["Dias sem comprar", "Valor Total"],
-    ascending=[False, False]
+df_risco = (
+    df[
+        (df["Estado"] == "🚨 Em risco") &
+        (df["Nível"].isin(filtro_risco))
+    ]
+    .sort_values("Ultimo Pedido", ascending=False)
 )
+
 
 with col_info2:
     st.metric("Total", len(df_risco))
@@ -363,13 +367,14 @@ with col_filtro3:
         key="filtro_dormentes"
     )
 
-df_dormentes = df[
-    (df["Estado"] == "💤 Dormente") &
-    (df["Nível"].isin(filtro_dormentes))
-].sort_values(
-    ["Dias sem comprar"],
-    ascending=False
+df_dormentes = (
+    df[
+        (df["Estado"] == "💤 Dormente") &
+        (df["Nível"].isin(filtro_dormentes))
+    ]
+    .sort_values("Ultimo Pedido", ascending=False)
 )
+
 
 with col_info3:
     st.metric("Total", len(df_dormentes))

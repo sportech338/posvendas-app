@@ -244,7 +244,7 @@ COLUNAS_DISPLAY = [
     "Dias sem comprar"
 ]
 
-CLASSIFICACOES = ["Iniciante", "Promissor", "Leal", "Campeão"]
+CLASSIFICACOES = ["Novo", "Promissor", "Leal", "Campeão"]
 
 
 # ======================================================

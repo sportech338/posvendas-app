@@ -113,36 +113,6 @@ df["Último Pedido"] = pd.to_datetime(
     dayfirst=True
 )
 
-# ======================================================
-# 🧾 LOG — QUALIDADE DA COLUNA "ÚLTIMO PEDIDO"
-# ======================================================
-total_clientes = len(df)
-sem_data = df["Último Pedido"].isna().sum()
-
-st.caption(
-    f"🧾 Log dados | Último Pedido inválido: {sem_data} / {total_clientes}"
-)
-
-with st.expander("🧪 Debug — Último Pedido com problema", expanded=False):
-    df_debug = df[df["Último Pedido"].isna()].copy()
-    
-    st.write(f"Total registros com problema: {len(df_debug)}")
-    
-    if not df_debug.empty:
-        st.dataframe(
-            df_debug[[
-                "Customer ID",
-                "Cliente",
-                "Email",
-                "Último Pedido",
-                "Qtd Pedidos",
-                "Valor Total"
-            ]],
-            use_container_width=True,
-            hide_index=True
-        )
-
-
 if df.empty:
     st.warning("⚠️ Nenhum cliente encontrado. Execute a sincronização primeiro.")
     st.stop()

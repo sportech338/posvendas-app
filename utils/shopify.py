@@ -5,11 +5,141 @@ import streamlit as st
 import time
 import hmac
 import hashlib
+import pandas as pd
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Generator, Dict, List, Optional
+
+APP_TZ = ZoneInfo("America/Sao_Paulo")
 
 
 # ======================================================
-# BUSCAR PEDIDOS PAGOS EM LOTES
+# SESSION GLOBAL (otimização de requisições)
+# ======================================================
+_session = None
+
+def _get_session():
+    """Retorna sessão HTTP reutilizável para otimizar requisições."""
+    global _session
+    if _session is None:
+        s = requests.Session()
+        s.headers.update({"Accept-Encoding": "gzip, deflate"})
+        _session = s
+    return _session
+
+
+# ======================================================
+# BUSCAR PEDIDOS PAGOS DIRETO (COM CACHE) - RECOMENDADO
+# ======================================================
+@st.cache_data(ttl=300)  # Cache de 5 minutos
+def buscar_pedidos_pagos_direto(start_date=None, end_date=None, limit=250):
+    """
+    Busca pedidos PAGOS diretamente da Shopify com CACHE.
+    Atualiza automaticamente a cada 5 minutos.
+    
+    IGUAL ao seu código de logística! 🎯
+    
+    Args:
+        start_date: Data inicial (datetime.date) - padrão: 01/01/2023
+        end_date: Data final (datetime.date) - padrão: hoje
+        limit: Máximo de pedidos por página (máx 250)
+    
+    Returns:
+        pd.DataFrame com pedidos pagos
+    
+    Exemplo:
+        >>> df = buscar_pedidos_pagos_direto()
+        >>> print(len(df))  # Mostra quantidade de pedidos
+    """
+    try:
+        shop = st.secrets["shopify"]["shop_name"]
+        token = st.secrets["shopify"]["access_token"]
+        version = st.secrets["shopify"]["API_VERSION"]
+    except KeyError as e:
+        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    
+    BASE_URL = f"https://{shop}/admin/api/{version}"
+    HEADERS = {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json"
+    }
+    
+    # Definir período
+    hoje = datetime.now(APP_TZ).date()
+    if start_date is None:
+        start_date = datetime(2023, 1, 1).date()
+    if end_date is None:
+        end_date = hoje
+    
+    start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=APP_TZ)
+    end_dt = datetime.combine(end_date, datetime.max.time(), tzinfo=APP_TZ)
+    
+    start_str = start_dt.strftime("%Y-%m-%dT%H:%M:%S%z")
+    end_str = end_dt.strftime("%Y-%m-%dT%H:%M:%S%z")
+    
+    url = f"{BASE_URL}/orders.json?limit={limit}&status=any&financial_status=paid&created_at_min={start_str}&created_at_max={end_str}"
+    
+    all_rows = []
+    s = _get_session()
+    
+    while url:
+        try:
+            r = s.get(url, headers=HEADERS, timeout=60)
+            
+            # Rate limit
+            if r.status_code == 429:
+                retry_after = int(r.headers.get("Retry-After", 2))
+                time.sleep(retry_after)
+                continue
+            
+            r.raise_for_status()
+            
+        except requests.exceptions.RequestException as e:
+            raise ConnectionError(f"❌ Erro ao conectar com Shopify: {str(e)}")
+        
+        data = r.json()
+        orders = data.get("orders", [])
+        
+        if not orders:
+            break
+        
+        for o in orders:
+            customer = o.get("customer") or {}
+            shipping = o.get("shipping_address") or {}
+            
+            nome_cliente = (
+                f"{customer.get('first_name', '')} {customer.get('last_name', '')}".strip()
+                or "SEM NOME"
+            )
+            
+            email_cliente = (
+                customer.get("email")
+                or o.get("email")
+                or o.get("contact_email")
+                or "sem-email@exemplo.com"
+            )
+            
+            all_rows.append({
+                "Pedido ID": str(o.get("id", "")),
+                "Data de criação": o.get("created_at"),
+                "Customer ID": str(customer.get("id", "")),
+                "Cliente": nome_cliente,
+                "Email": email_cliente,
+                "Valor Total": float(o.get("total_price", 0)),
+                "Pedido": o.get("order_number"),
+                "Financial Status": o.get("financial_status"),
+                "Cancelled At": o.get("cancelled_at"),
+                "Total Refunded": float(o.get("total_refunded", 0))
+            })
+        
+        # Paginação
+        url = r.links.get("next", {}).get("url")
+    
+    return pd.DataFrame(all_rows)
+
+
+# ======================================================
+# BUSCAR PEDIDOS PAGOS EM LOTES (para sincronização manual)
 # ======================================================
 def puxar_pedidos_pagos_em_lotes(
     lote_tamanho: int = 500,
@@ -29,11 +159,6 @@ def puxar_pedidos_pagos_em_lotes(
     - NÃO converte datas
     - NÃO formata valores para pt-BR
     
-    Exemplo de data retornada:
-    "2026-01-03T21:50:37-03:00"
-
-    A conversão de datas/valores é responsabilidade da camada de visualização.
-    
     Yields:
     Lista de dicionários com pedidos (lotes de até `lote_tamanho` pedidos)
     
@@ -42,10 +167,6 @@ def puxar_pedidos_pagos_em_lotes(
     >>>     df = pd.DataFrame(lote)
     >>>     processar(df)
     """
-
-    # =========================
-    # CONFIG SHOPIFY (secrets)
-    # =========================
     try:
         shop = st.secrets["shopify"]["shop_name"]
         token = st.secrets["shopify"]["access_token"]
@@ -64,22 +185,18 @@ def puxar_pedidos_pagos_em_lotes(
         "Content-Type": "application/json"
     }
 
-    # ⚠️ PARAMS APENAS NA PRIMEIRA REQUEST
     params = {
-        "financial_status": "paid",      # Apenas pedidos pagos
-        "status": "any",                 # Qualquer status (aberto/fechado)
-        "limit": 250,                    # Máximo permitido pela Shopify API
-        "created_at_min": data_inicio,   # Data mínima de criação
-        "order": "created_at desc"       # Mais novos primeiro
+        "financial_status": "paid",
+        "status": "any",
+        "limit": 250,
+        "created_at_min": data_inicio,
+        "order": "created_at desc"
     }
 
     buffer = []
     url = base_url
     total_pedidos = 0
 
-    # =========================
-    # LOOP DE PAGINAÇÃO
-    # =========================
     while url:
         try:
             response = requests.get(
@@ -89,17 +206,11 @@ def puxar_pedidos_pagos_em_lotes(
                 timeout=30
             )
 
-            # =========================
-            # RATE LIMIT SHOPIFY (429)
-            # =========================
             if response.status_code == 429:
                 retry_after = int(response.headers.get("Retry-After", 2))
                 time.sleep(retry_after)
                 continue
 
-            # =========================
-            # TRATAMENTO DE ERROS HTTP
-            # =========================
             if response.status_code != 200:
                 raise requests.HTTPError(
                     f"Shopify API retornou status {response.status_code}: "
@@ -109,13 +220,8 @@ def puxar_pedidos_pagos_em_lotes(
             response.raise_for_status()
 
         except requests.exceptions.RequestException as e:
-            raise ConnectionError(
-                f"❌ Erro ao conectar com Shopify API: {str(e)}"
-            )
+            raise ConnectionError(f"❌ Erro ao conectar com Shopify API: {str(e)}")
 
-        # =========================
-        # PROCESSAR PEDIDOS
-        # =========================
         orders = response.json().get("orders", [])
 
         if not orders:
@@ -125,17 +231,14 @@ def puxar_pedidos_pagos_em_lotes(
             customer = o.get("customer") or {}
             shipping = o.get("shipping_address") or {}
 
-            # Extrair dados do pedido
             pedido = {
                 "Pedido ID": str(o.get("id", "")),
-                "Data de criação": o.get("created_at"),  # ISO 8601
+                "Data de criação": o.get("created_at"),
                 "Customer ID": str(customer.get("id", "")),
                 "Cliente": _extrair_nome_cliente(customer, shipping),
                 "Email": o.get("email") or "",
                 "Valor Total": float(o.get("total_price", 0)),
                 "Pedido": o.get("order_number"),
-                
-                # Campos internos (usados para filtrar cancelados/reembolsados)
                 "Financial Status": o.get("financial_status"),
                 "Cancelled At": o.get("cancelled_at"),
                 "Total Refunded": float(o.get("total_refunded", 0))
@@ -144,20 +247,13 @@ def puxar_pedidos_pagos_em_lotes(
             buffer.append(pedido)
             total_pedidos += 1
 
-            # 🔹 Entrega lote quando atinge o tamanho definido
             if len(buffer) >= lote_tamanho:
                 yield buffer
                 buffer = []
 
-        # =========================
-        # PAGINAÇÃO SHOPIFY (Link header)
-        # =========================
         url = _extrair_proxima_pagina(response.headers.get("Link"))
-        params = {}  # Params só na primeira request
+        params = {}
 
-    # =========================
-    # ENTREGAR ÚLTIMO LOTE (se houver)
-    # =========================
     if buffer:
         yield buffer
 
@@ -175,10 +271,6 @@ def buscar_pedido_por_id(pedido_id: str) -> Optional[Dict]:
     
     Returns:
         Dicionário com dados do pedido ou None se não encontrado
-    
-    Exemplo:
-        >>> pedido = buscar_pedido_por_id("123456789")
-        >>> print(pedido["Customer ID"])
     """
     try:
         shop = st.secrets["shopify"]["shop_name"]
@@ -207,7 +299,6 @@ def buscar_pedido_por_id(pedido_id: str) -> Optional[Dict]:
         if not order:
             return None
         
-        # Formatar pedido no mesmo padrão de puxar_pedidos_pagos_em_lotes
         customer = order.get("customer") or {}
         shipping = order.get("shipping_address") or {}
         
@@ -232,34 +323,17 @@ def buscar_pedido_por_id(pedido_id: str) -> Optional[Dict]:
 # VALIDAR WEBHOOK DA SHOPIFY
 # ======================================================
 def validar_webhook_shopify(data: bytes, hmac_header: str, secret: str) -> bool:
-    """
-    Valida se um webhook veio realmente da Shopify usando HMAC SHA256.
-    
-    Args:
-        data: Corpo da requisição (bytes)
-        hmac_header: Header "X-Shopify-Hmac-Sha256" enviado pela Shopify
-        secret: Seu Shopify Webhook Secret (configurado no .env)
-    
-    Returns:
-        True se webhook é válido, False caso contrário
-    
-    Exemplo:
-        >>> from flask import request
-        >>> if validar_webhook_shopify(request.data, request.headers.get("X-Shopify-Hmac-Sha256"), SECRET):
-        >>>     processar_webhook()
-    """
+    """Valida se um webhook veio realmente da Shopify usando HMAC SHA256."""
     if not secret:
         print("⚠️ SHOPIFY_WEBHOOK_SECRET não configurado!")
         return False
     
-    # Calcular hash
     hash_calculado = hmac.new(
         secret.encode('utf-8'),
         data,
         hashlib.sha256
     ).hexdigest()
     
-    # Comparar com o hash enviado pela Shopify
     return hmac.compare_digest(hash_calculado, hmac_header)
 
 
@@ -267,29 +341,7 @@ def validar_webhook_shopify(data: bytes, hmac_header: str, secret: str) -> bool:
 # CRIAR WEBHOOK NA SHOPIFY (PROGRAMÁTICO)
 # ======================================================
 def criar_webhook(topico: str, url_callback: str) -> Optional[Dict]:
-    """
-    Cria um webhook na Shopify programaticamente.
-    
-    Args:
-        topico: Evento a monitorar (ex: "orders/paid", "orders/create")
-        url_callback: URL pública do seu servidor que receberá o webhook
-    
-    Returns:
-        Dados do webhook criado ou None se falhar
-    
-    Tópicos disponíveis:
-    - orders/paid (pedido pago)
-    - orders/create (pedido criado)
-    - orders/updated (pedido atualizado)
-    - orders/cancelled (pedido cancelado)
-    
-    Exemplo:
-        >>> webhook = criar_webhook(
-        >>>     topico="orders/paid",
-        >>>     url_callback="https://seu-dominio.com/webhooks/orders/paid"
-        >>> )
-        >>> print(f"Webhook ID: {webhook['id']}")
-    """
+    """Cria um webhook na Shopify programaticamente."""
     try:
         shop = st.secrets["shopify"]["shop_name"]
         token = st.secrets["shopify"]["access_token"]
@@ -334,17 +386,7 @@ def criar_webhook(topico: str, url_callback: str) -> Optional[Dict]:
 # LISTAR WEBHOOKS EXISTENTES
 # ======================================================
 def listar_webhooks() -> List[Dict]:
-    """
-    Lista todos os webhooks configurados na Shopify.
-    
-    Returns:
-        Lista de webhooks ativos
-    
-    Exemplo:
-        >>> webhooks = listar_webhooks()
-        >>> for w in webhooks:
-        >>>     print(f"{w['topic']} → {w['address']}")
-    """
+    """Lista todos os webhooks configurados na Shopify."""
     try:
         shop = st.secrets["shopify"]["shop_name"]
         token = st.secrets["shopify"]["access_token"]
@@ -362,9 +404,7 @@ def listar_webhooks() -> List[Dict]:
     try:
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-        
         return response.json().get("webhooks", [])
-        
     except requests.exceptions.RequestException as e:
         print(f"❌ Erro ao listar webhooks: {str(e)}")
         return []
@@ -374,18 +414,7 @@ def listar_webhooks() -> List[Dict]:
 # DELETAR WEBHOOK
 # ======================================================
 def deletar_webhook(webhook_id: int) -> bool:
-    """
-    Deleta um webhook específico da Shopify.
-    
-    Args:
-        webhook_id: ID do webhook a deletar
-    
-    Returns:
-        True se deletado com sucesso, False caso contrário
-    
-    Exemplo:
-        >>> deletar_webhook(123456789)
-    """
+    """Deleta um webhook específico da Shopify."""
     try:
         shop = st.secrets["shopify"]["shop_name"]
         token = st.secrets["shopify"]["access_token"]
@@ -403,105 +432,18 @@ def deletar_webhook(webhook_id: int) -> bool:
     try:
         response = requests.delete(url, headers=headers, timeout=10)
         response.raise_for_status()
-        
         print(f"✅ Webhook {webhook_id} deletado com sucesso!")
         return True
-        
     except requests.exceptions.RequestException as e:
         print(f"❌ Erro ao deletar webhook: {str(e)}")
         return False
 
 
 # ======================================================
-# FUNÇÕES AUXILIARES
+# CONTAR PEDIDOS (SEM BAIXAR TODOS)
 # ======================================================
-def _extrair_nome_cliente(customer: dict, shipping: dict = None) -> str:
-    """
-    Extrai nome do cliente.
-    Prioridade:
-    1. customer (perfil)
-    2. shipping_address (checkout)
-    3. fallback seguro
-    """
-    first = (customer.get("first_name") or "").strip()
-    last = (customer.get("last_name") or "").strip()
-
-    if not first and shipping:
-        first = (shipping.get("first_name") or "").strip()
-        last = (shipping.get("last_name") or "").strip()
-
-    nome_completo = f"{first} {last}".strip()
-    return nome_completo if nome_completo else "SEM NOME"
-
-
-def _extrair_proxima_pagina(link_header: str) -> str:
-    """
-    Extrai URL da próxima página do header "Link" da Shopify.
-    
-    Formato do header:
-    <https://shop.myshopify.com/...>; rel="next", <https://...>; rel="previous"
-    
-    Retorna:
-    - URL da próxima página se existir
-    - None se não houver mais páginas
-    """
-    if not link_header:
-        return None
-    
-    # Separar as partes do header
-    for parte in link_header.split(","):
-        if 'rel="next"' in parte:
-            # Extrair URL entre < e >
-            url = (
-                parte
-                .split(";")[0]
-                .replace("<", "")
-                .replace(">", "")
-                .strip()
-            )
-            return url
-    
-    return None
-
-
-# ======================================================
-# BUSCAR PEDIDOS DIRETO (SEM LOTES) - OPCIONAL
-# ======================================================
-def puxar_todos_pedidos_pagos(
-    data_inicio: str = "2023-01-01T00:00:00-03:00"
-) -> List[Dict]:
-    """
-    Busca TODOS os pedidos pagos de uma vez (sem lotes).
-    
-    ⚠️ ATENÇÃO: Use apenas se tiver POUCOS pedidos (< 1000)
-    Para lojas com muitos pedidos, use `puxar_pedidos_pagos_em_lotes()`
-    
-    Retorna:
-    Lista completa de pedidos (pode consumir muita memória)
-    """
-    todos_pedidos = []
-    
-    for lote in puxar_pedidos_pagos_em_lotes(
-        lote_tamanho=500,
-        data_inicio=data_inicio
-    ):
-        todos_pedidos.extend(lote)
-    
-    return todos_pedidos
-
-
-# ======================================================
-# CONTAR PEDIDOS (SEM BAIXAR TODOS) - ÚTIL PARA DEBUG
-# ======================================================
-def contar_pedidos_pagos(
-    data_inicio: str = "2023-01-01T00:00:00-03:00"
-) -> int:
-    """
-    Conta quantos pedidos pagos existem na Shopify
-    SEM baixar todos os dados (mais rápido).
-    
-    Útil para verificar se há novos pedidos antes de sincronizar.
-    """
+def contar_pedidos_pagos(data_inicio: str = "2023-01-01T00:00:00-03:00") -> int:
+    """Conta quantos pedidos pagos existem SEM baixar todos os dados."""
     try:
         shop = st.secrets["shopify"]["shop_name"]
         token = st.secrets["shopify"]["access_token"]
@@ -528,3 +470,38 @@ def contar_pedidos_pagos(
         return response.json().get("count", 0)
     except requests.exceptions.RequestException as e:
         raise ConnectionError(f"❌ Erro ao contar pedidos: {str(e)}")
+
+
+# ======================================================
+# FUNÇÕES AUXILIARES
+# ======================================================
+def _extrair_nome_cliente(customer: dict, shipping: dict = None) -> str:
+    """Extrai nome do cliente com fallback."""
+    first = (customer.get("first_name") or "").strip()
+    last = (customer.get("last_name") or "").strip()
+
+    if not first and shipping:
+        first = (shipping.get("first_name") or "").strip()
+        last = (shipping.get("last_name") or "").strip()
+
+    nome_completo = f"{first} {last}".strip()
+    return nome_completo if nome_completo else "SEM NOME"
+
+
+def _extrair_proxima_pagina(link_header: str) -> str:
+    """Extrai URL da próxima página do header Link da Shopify."""
+    if not link_header:
+        return None
+    
+    for parte in link_header.split(","):
+        if 'rel="next"' in parte:
+            url = (
+                parte
+                .split(";")[0]
+                .replace("<", "")
+                .replace(">", "")
+                .strip()
+            )
+            return url
+    
+    return None

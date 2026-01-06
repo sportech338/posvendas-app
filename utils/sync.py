@@ -9,8 +9,7 @@ from utils.sheets import (
     append_aba,
     ler_ids_existentes,
     ler_aba,
-    escrever_aba,
-    inserir_abaixo_cabecalho
+    escrever_aba
 )
 from utils.classificacao import agregar_por_cliente, calcular_estado
 
@@ -133,18 +132,11 @@ def _reagregar_clientes(nome_planilha: str, resultado_pedidos: dict) -> dict:
             "mensagem": "⚠️ Nenhum pedido encontrado para agregação"
         }
 
-    df_pedidos["Data de criação"] = pd.to_datetime(
-        df_pedidos["Data de criação"],
-        errors="coerce"
+    df_pedidos["Data de criação"] = (
+        pd.to_datetime(df_pedidos["Data de criação"], errors="coerce", utc=True)
+        .dt.tz_convert("America/Sao_Paulo")
+        .dt.tz_localize(None)
     )
-
-    # se vier com timezone (ex: 2026-01-06T12:27:13-03:00), converte e remove tz
-    if df_pedidos["Data de criação"].dt.tz is not None:
-        df_pedidos["Data de criação"] = (
-            df_pedidos["Data de criação"]
-            .dt.tz_convert("America/Sao_Paulo")
-            .dt.tz_localize(None)
-        )
 
     df_clientes = agregar_por_cliente(df_pedidos)
     df_clientes = calcular_estado(df_clientes, 45, 90)
@@ -229,23 +221,7 @@ def sincronizar_shopify_com_planilha(
         # 🔒 GARANTIR CONTRATO DA ABA
         df_validos = df_validos[COLUNAS_PEDIDOS]
 
-        # ✅ GARANTIR ORDEM: MAIS ANTIGO → MAIS RECENTE
-        df_validos["Data de criação"] = pd.to_datetime(
-            df_validos["Data de criação"],
-            errors="coerce"
-        )
-
-        df_validos = df_validos.sort_values(
-            "Data de criação",
-            ascending=True
-        )
-
-        # 👉 INSERIR LOGO ABAIXO DO CABEÇALHO (LINHA 2)
-        inserir_abaixo_cabecalho(
-            nome_planilha,
-            "Pedidos Shopify",
-            df_validos
-        )
+        append_aba(nome_planilha, "Pedidos Shopify", df_validos)
         ids_pedidos.update(df_validos["Pedido ID"])
         total_novos += len(df_validos)
 

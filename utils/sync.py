@@ -38,6 +38,45 @@ def _data_inicio_ontem() -> str:
 
 
 # ======================================================
+# UTIL — DATA DE INÍCIO INCREMENTAL (BASEADA NA PLANILHA)
+# ======================================================
+def calcular_data_inicio_incremental(
+    nome_planilha: str,
+    margem_minutos: int = 10
+) -> str:
+    """
+    Calcula a data inicial para sincronização incremental
+    baseada na última Data de criação salva na aba Pedidos Shopify.
+    Aplica margem de segurança para evitar perda de pedidos.
+    """
+    try:
+        df = ler_aba(nome_planilha, "Pedidos Shopify")
+
+        if df.empty or "Data de criação" not in df.columns:
+            return "2023-01-01T00:00:00-03:00"
+
+        ultima_data = pd.to_datetime(
+            df["Data de criação"],
+            errors="coerce",
+            utc=True
+        ).max()
+
+        ultima_data = ultima_data.tz_convert("America/Sao_Paulo").tz_localize(None)
+
+
+        if pd.isna(ultima_data):
+            return "2023-01-01T00:00:00-03:00"
+
+        data_inicio = ultima_data - timedelta(minutes=margem_minutos)
+
+        return data_inicio.strftime("%Y-%m-%dT%H:%M:%S-03:00")
+
+    except Exception:
+        # Fallback absoluto
+        return "2023-01-01T00:00:00-03:00"
+
+
+# ======================================================
 # SINCRONIZAÇÃO COMPLETA (BOTÃO MANUAL)
 # ======================================================
 def sincronizar_shopify_completo(
@@ -62,7 +101,9 @@ def sincronizar_shopify_completo(
 def sincronizar_shopify_incremental(
     nome_planilha: str = "Clientes Shopify"
 ) -> dict:
-    data_inicio = _data_inicio_ontem()
+
+    # 🔑 NOVO: data baseada na última Data de criação salva
+    data_inicio = calcular_data_inicio_incremental(nome_planilha)
 
     resultado_pedidos = sincronizar_shopify_com_planilha(
         nome_planilha=nome_planilha,
@@ -73,7 +114,7 @@ def sincronizar_shopify_incremental(
     if resultado_pedidos["total_novos"] == 0:
         return {
             "status": "noop",
-            "mensagem": "⏱️ Nenhum pedido novo nos últimos 2 dias"
+            "mensagem": "⏱️ Nenhum pedido novo desde a última sincronização"
         }
 
     return _reagregar_clientes(nome_planilha, resultado_pedidos)

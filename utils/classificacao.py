@@ -28,11 +28,11 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     - Qtd Pedidos
     - Valor Total (soma)
     - Primeiro Pedido
-    - Ultimo Pedido
+    - Último Pedido
     - Dias sem comprar
-    - Nível (Novo/Promissor/Leal/Campeão)
+    - Nível (Iniciante/Promissor/Leal/Campeão)
     
-    ORDENAÇÃO: Mais recente no topo (Ultimo Pedido DESC)
+    ORDENAÇÃO: Mais recente no topo (Último Pedido DESC)
     
     Raises:
         ValueError: Se colunas obrigatórias estiverem ausentes
@@ -97,7 +97,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         "Valor_Total": "Valor Total",
         "Qtd_Pedidos": "Qtd Pedidos",
         "Primeiro_Pedido": "Primeiro Pedido",
-        "Ultimo_Pedido": "Ultimo Pedido",
+        "Ultimo_Pedido": "Último Pedido",
     })
     
     # ======================================================
@@ -105,25 +105,25 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     # ======================================================
     df_clientes = df_clientes.copy()
 
-    df_clientes["Ultimo Pedido"] = pd.to_datetime(
-        df_clientes["Ultimo Pedido"],
+    df_clientes["Último Pedido"] = pd.to_datetime(
+        df_clientes["Último Pedido"],
         errors="coerce"
     )
 
     # Marcar registros com problema de data (debug explícito)
-    df_clientes["Erro Data Ultimo Pedido"] = df_clientes["Ultimo Pedido"].isna()
+    df_clientes["Erro Data Último Pedido"] = df_clientes["Último Pedido"].isna()
 
     hoje = pd.Timestamp.now(
         tz=pytz.timezone("America/Sao_Paulo")
     ).tz_localize(None)
 
     df_clientes["Dias sem comprar"] = (
-        hoje - df_clientes["Ultimo Pedido"]
+        hoje - df_clientes["Último Pedido"]
     ).dt.days
 
     # 👇 ESTA LINHA ENTRA AQUI (mesma identação)
     df_clientes.loc[
-        df_clientes["Erro Data Ultimo Pedido"],
+        df_clientes["Erro Data Último Pedido"],
         "Dias sem comprar"
     ] = None
 
@@ -144,7 +144,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     # 5. ORDENAR POR DATA (MAIS RECENTE PRIMEIRO)
     # ======================================================
     df_clientes = df_clientes.sort_values(
-        ["Ultimo Pedido"],
+        ["Último Pedido"],
         ascending=[False]  # Mais recente no topo
     )
     
@@ -158,7 +158,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         "Qtd Pedidos",
         "Valor Total",
         "Primeiro Pedido",
-        "Ultimo Pedido",
+        "Último Pedido",
         "Dias sem comprar",
         "Nível"
     ]
@@ -184,7 +184,7 @@ def _calcular_classificacao(row) -> str:
     - Campeão: (5+ pedidos OU R$ 5.000+) E ativo há < 60 dias
     - Leal: (3+ pedidos OU R$ 2.000+) E ativo há < 90 dias
     - Promissor: (2+ pedidos OU R$ 500+) E ativo há < 120 dias
-    - Novo: 1 pedido e ativo há < 90 dias
+    - Iniciante: 1 pedido e ativo há < 90 dias
     
     Args:
         row: Linha do DataFrame com as colunas:
@@ -227,7 +227,7 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
     
     Args:
         df_clientes: DataFrame com clientes agregados
-                     (deve ter colunas "Qtd Pedidos", "Primeiro Pedido", "Ultimo Pedido")
+                     (deve ter colunas "Qtd Pedidos", "Primeiro Pedido", "Último Pedido")
     
     Returns:
         dict: {
@@ -262,8 +262,8 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         errors="coerce"
     )
 
-    df_clientes["Ultimo Pedido"] = pd.to_datetime(
-        df_clientes["Ultimo Pedido"],
+    df_clientes["Último Pedido"] = pd.to_datetime(
+        df_clientes["Último Pedido"],
         errors="coerce"
     )
 
@@ -284,7 +284,7 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
     
     # Calcular dias totais entre primeira e última compra
     clientes_recorrentes["Dias_Total"] = (
-        clientes_recorrentes["Ultimo Pedido"] - 
+        clientes_recorrentes["Último Pedido"] - 
         clientes_recorrentes["Primeiro Pedido"]
     ).dt.days
     

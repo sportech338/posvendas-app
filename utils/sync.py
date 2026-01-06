@@ -121,6 +121,13 @@ def sincronizar_incremental(nome_planilha: str = "Clientes Shopify") -> dict:
             "total_clientes": 0
         }
     
+    # ✅ ADICIONAR: Converter Valor Total ANTES de normalizar datas
+    if "Valor Total" in df_pedidos.columns:
+        df_pedidos["Valor Total"] = pd.to_numeric(
+            df_pedidos["Valor Total"],
+            errors="coerce"
+        ).fillna(0)
+    
     # ==================================================
     # 7. NORMALIZAR DATAS
     # ==================================================
@@ -130,13 +137,13 @@ def sincronizar_incremental(nome_planilha: str = "Clientes Shopify") -> dict:
         .dt.tz_localize(None)
     )
     
-    # ✅ ADICIONAR: REORDENAR PEDIDOS (MAIS RECENTE NO TOPO)
+    # REORDENAR PEDIDOS (MAIS RECENTE NO TOPO)
     df_pedidos = df_pedidos.sort_values(
         "Data de criação",
         ascending=False  # Mais recente primeiro
     ).reset_index(drop=True)
     
-    # ✅ ADICIONAR: SOBRESCREVER ABA DE PEDIDOS ORDENADA
+    # SOBRESCREVER ABA DE PEDIDOS ORDENADA
     try:
         escrever_aba(
             planilha=nome_planilha,

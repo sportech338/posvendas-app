@@ -30,7 +30,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     - Primeiro Pedido
     - Ultimo Pedido
     - Dias sem comprar
-    - Nível (Novo/Promissor/Leal/Campeão)
+    - Nível (Iniciante/Promissor/Leal/Campeão)
     
     ORDENAÇÃO: Mais recente no topo (Ultimo Pedido DESC)
     
@@ -184,14 +184,14 @@ def _calcular_classificacao(row) -> str:
     - Campeão: (5+ pedidos OU R$ 5.000+) E ativo há < 60 dias
     - Leal: (3+ pedidos OU R$ 2.000+) E ativo há < 90 dias
     - Promissor: (2+ pedidos OU R$ 500+) E ativo há < 120 dias
-    - Novo: 1 pedido e ativo há < 90 dias
+    - Iniciante: 1 pedido e ativo há < 90 dias
     
     Args:
         row: Linha do DataFrame com as colunas:
              "Qtd Pedidos", "Valor Total", "Dias sem comprar"
     
     Returns:
-        str: "Campeão", "Leal", "Promissor" ou "Novo"
+        str: "Campeão", "Leal", "Promissor" ou "Iniciante"
     """
     qtd = row["Qtd Pedidos"]
     valor = row["Valor Total"]
@@ -209,12 +209,12 @@ def _calcular_classificacao(row) -> str:
     if (qtd >= 2 or valor >= 500) and dias < 120:
         return "Promissor"
     
-    # 🆕 NOVO: Primeira compra recente
+    # 🌱 INICIANTE: Primeira compra recente
     if qtd == 1 and dias < 90:
-        return "Novo"
+        return "Iniciante"
     
-    # Fallback: classificar como Novo
-    return "Novo"
+    # Fallback: classificar como Iniciante
+    return "Iniciante"
 
 
 # ======================================================
@@ -444,7 +444,7 @@ def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> Dict:
             "total_campeoes": int,
             "total_leais": int,
             "total_promissores": int,
-            "total_novos": int,
+            "total_iniciantes": int,
             "total_ativos": int,
             "total_em_risco": int,
             "total_dormentes": int
@@ -463,7 +463,7 @@ def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> Dict:
             "total_campeoes": 0,
             "total_leais": 0,
             "total_promissores": 0,
-            "total_novos": 0,
+            "total_iniciantes": 0,
             "total_ativos": 0,
             "total_em_risco": 0,
             "total_dormentes": 0
@@ -489,7 +489,7 @@ def calcular_metricas_gerais(df_clientes: pd.DataFrame) -> Dict:
         "total_campeoes": contagem_nivel.get("Campeão", 0),
         "total_leais": contagem_nivel.get("Leal", 0),
         "total_promissores": contagem_nivel.get("Promissor", 0),
-        "total_novos": contagem_nivel.get("Novo", 0),
+        "total_iniciantes": contagem_nivel.get("Iniciante", 0),
         "total_ativos": contagem_estado.get("🟢 Ativo", 0),
         "total_em_risco": contagem_estado.get("🚨 Em risco", 0),
         "total_dormentes": contagem_estado.get("💤 Dormente", 0)

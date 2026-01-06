@@ -221,7 +221,13 @@ def sincronizar_shopify_com_planilha(
         # 🔒 GARANTIR CONTRATO DA ABA
         df_validos = df_validos[COLUNAS_PEDIDOS]
 
-        append_aba(nome_planilha, "Pedidos Shopify", df_validos)
+        from utils.sheets import inserir_abaixo_cabecalho
+
+        inserir_abaixo_cabecalho(
+            nome_planilha,
+            "Pedidos Shopify",
+            df_validos
+        )
         ids_pedidos.update(df_validos["Pedido ID"])
         total_novos += len(df_validos)
 

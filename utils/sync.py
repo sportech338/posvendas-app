@@ -268,6 +268,25 @@ def carregar_dados_planilha(nome_planilha: str = "Clientes Shopify") -> pd.DataF
                 errors="coerce"
             )
         
+        # ✅ CORRIGIDO: Converter colunas numéricas
+        if "Dias sem comprar" in df_clientes.columns:
+            df_clientes["Dias sem comprar"] = pd.to_numeric(
+                df_clientes["Dias sem comprar"],
+                errors="coerce"
+            ).fillna(0).astype(int)
+        
+        if "Qtd Pedidos" in df_clientes.columns:
+            df_clientes["Qtd Pedidos"] = pd.to_numeric(
+                df_clientes["Qtd Pedidos"],
+                errors="coerce"
+            ).fillna(0).astype(int)
+        
+        if "Valor Total" in df_clientes.columns:
+            df_clientes["Valor Total"] = pd.to_numeric(
+                df_clientes["Valor Total"],
+                errors="coerce"
+            ).fillna(0)
+        
         return df_clientes
         
     except Exception as e:

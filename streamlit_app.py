@@ -169,19 +169,19 @@ with st.expander("📊 Análise de Ciclo de Compra — Ajustar Thresholds", expa
             with col_t1:
                 st.success(
                     f"**🟢 Ativo**\n\n"
-                    f"Até {ciclo['threshold_ativo']} dias"
+                    f"Até {ciclo['limite_risco']} dias"
                 )
-            
+                
             with col_t2:
                 st.warning(
                     f"**🚨 Em Risco**\n\n"
-                    f"{ciclo['threshold_ativo']} - {ciclo['threshold_risco']} dias"
+                    f"{ciclo['limite_risco']} - {ciclo['limite_dormente']} dias"
                 )
-            
+
             with col_t3:
                 st.error(
                     f"**💤 Dormente**\n\n"
-                    f"Mais de {ciclo['threshold_risco']} dias"
+                    f"Mais de {ciclo['limite_dormente']} dias"
                 )
             
             st.info(
@@ -198,8 +198,8 @@ with st.expander("📊 Análise de Ciclo de Compra — Ajustar Thresholds", expa
                 f"(encontrados: {ciclo['total_recorrentes']}, mínimo: 5)"
             )
             st.info(
-                "Os thresholds atuais (45/90 dias) são estimativas genéricas. "
-                "Ajuste conforme seu negócio crescer."
+                "Os thresholds atuais (60/120 dias) seguem o padrão operacional definido. "
+                "A análise acima serve apenas como referência estratégica."
             )
     except Exception as e:
         st.error(f"❌ Erro ao calcular ciclo de compra: {str(e)}")

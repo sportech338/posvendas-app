@@ -223,9 +223,8 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         return {
             "ciclo_mediana": None,
             "ciclo_media": None,
-            "threshold_ativo": 60,
-            "threshold_risco": 120,
-            "threshold_dormente": 120,
+            "limite_risco": 60,
+            "limite_dormente": 120,
             "total_recorrentes": 0
         }
 
@@ -251,10 +250,9 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         return {
             "ciclo_mediana": None,
             "ciclo_media": None,
-            "threshold_ativo": 60,
-            "threshold_risco": 120,
-            "threshold_dormente": 120,
-            "total_recorrentes": len(clientes_recorrentes)
+            "limite_risco": 60,
+            "limite_dormente": 120,
+            "total_recorrentes": 0
         }
     
     # Calcular dias totais entre primeira e última compra
@@ -278,9 +276,8 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         return {
             "ciclo_mediana": None,
             "ciclo_media": None,
-            "threshold_ativo": 60,
-            "threshold_risco": 120,
-            "threshold_dormente": 120,
+            "limite_risco": 60,
+            "limite_dormente": 120,
             "total_recorrentes": 0
         }
     
@@ -295,12 +292,10 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
     return {
         "ciclo_mediana": round(ciclo_mediana, 1),
         "ciclo_media": round(ciclo_media, 1),
-        "threshold_ativo": threshold_ativo,
-        "threshold_risco": threshold_risco,
-        "threshold_dormente": threshold_risco,
+        "limite_risco": threshold_ativo,      # ex: ~60
+        "limite_dormente": threshold_risco,   # ex: ~120
         "total_recorrentes": len(clientes_recorrentes)
     }
-
 
 # ======================================================
 # CALCULAR ESTADO (ATIVO / EM RISCO / DORMENTE)
@@ -313,39 +308,35 @@ def calcular_estado(
     """
     Adiciona coluna "Estado" ao DataFrame de clientes
     baseado em dias sem comprar.
-    
-    Args:
-        df_clientes: DataFrame com clientes
-        threshold_risco: Dias para classificar como "Em risco" (padrão: 60)
-        threshold_dormente: Dias para classificar como "Dormente" (padrão: 120)
-    
-    Returns:
-        pd.DataFrame: DataFrame original com coluna "Estado" adicionada
-    
-    Estados possíveis:
-        - "🟢 Ativo": < threshold_risco dias
-        - "🚨 Em risco": entre threshold_risco e threshold_dormente dias
-        - "💤 Dormente": >= threshold_dormente dias
-    
-    Exemplo:
-        >>> df = calcular_estado(df, threshold_risco=60, threshold_dormente=120)
+
+    Clientes com data inválida NÃO recebem estado
+    (ficam fora de métricas e segmentações).
     """
-    
+
     if df_clientes.empty:
         return df_clientes
-    
+
+    df_clientes = df_clientes.copy()
+
+    # ✅ Considerar apenas clientes com dias válidos
+    df_validos = df_clientes[df_clientes["Dias sem comprar"].notna()].copy()
+
     def _classificar_estado(dias):
-        if pd.isna(dias):
-            return "⚠️ Data inválida"
         if dias >= threshold_dormente:
             return "💤 Dormente"
         if dias >= threshold_risco:
             return "🚨 Em risco"
         return "🟢 Ativo"
-    
-    df_clientes = df_clientes.copy()
-    df_clientes["Estado"] = df_clientes["Dias sem comprar"].apply(_classificar_estado)
-    
+
+    df_validos["Estado"] = df_validos["Dias sem comprar"].apply(_classificar_estado)
+
+    # 🔁 Reintegrar com a base original
+    df_clientes = df_clientes.merge(
+        df_validos[["Customer ID", "Estado"]],
+        on="Customer ID",
+        how="left"
+    )
+
     return df_clientes
 
 

@@ -44,17 +44,51 @@ def sincronizar_shopify_completo(
     nome_planilha: str = "Clientes Shopify",
     lote_tamanho: int = 500
 ) -> dict:
-    resultado_pedidos = sincronizar_shopify_com_planilha(
-        nome_planilha=nome_planilha,
+    todos_pedidos = []
+
+    # 🔑 PUXAR DO MAIS ANTIGO → MAIS RECENTE
+    for lote in puxar_pedidos_pagos_em_lotes(
         lote_tamanho=lote_tamanho,
         data_inicio="2023-01-01T00:00:00-03:00",
-        ordem="asc"  # 👈 MAIS ANTIGO → MAIS RECENTE
+        ordem="asc"
+    ):
+        todos_pedidos.extend(lote)
+
+    if not todos_pedidos:
+        return {
+            "status": "warning",
+            "mensagem": "⚠️ Nenhum pedido encontrado"
+        }
+
+    df_pedidos = pd.DataFrame(todos_pedidos)
+
+    # 🔒 CONTRATO FIXO
+    df_pedidos = df_pedidos[COLUNAS_PEDIDOS]
+
+    # 🧠 CONVERTER E ORDENAR EXPLICITAMENTE (garantia total)
+    df_pedidos["Data de criação"] = pd.to_datetime(
+        df_pedidos["Data de criação"],
+        errors="coerce",
+        utc=True
     )
 
-    if resultado_pedidos["status"] != "success":
-        return resultado_pedidos
+    df_pedidos = df_pedidos.sort_values("Data de criação")
 
-    return _reagregar_clientes(nome_planilha, resultado_pedidos)
+    # ✍️ SOBRESCREVER A ABA INTEIRA
+    escrever_aba(
+        planilha=nome_planilha,
+        aba="Pedidos Shopify",
+        df=df_pedidos
+    )
+
+    # 🔄 REAGREGAR CLIENTES
+    return _reagregar_clientes(
+        nome_planilha,
+        {
+            "mensagem": f"📦 Pedidos sincronizados (rebuild): {len(df_pedidos)}"
+        }
+    )
+
 
 
 # ======================================================

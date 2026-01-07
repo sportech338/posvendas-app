@@ -198,6 +198,17 @@ def sincronizar_shopify_com_planilha(
         ids_pedidos.update(df_validos["Pedido ID"])
         total_novos += len(df_validos)
 
+    # ==================================================
+    # 🔽 ORDENAR PEDIDOS POR DATA (MAIS RECENTE NO TOPO)
+    # ==================================================
+    if total_novos > 0:
+        ordenar_aba_por_coluna_data(
+            planilha=nome_planilha,
+            aba="Pedidos Shopify",
+            coluna_data="Data de criação",
+            descending=True
+        )
+
     return {
         "status": "success",
         "mensagem": (

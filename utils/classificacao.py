@@ -336,7 +336,7 @@ def calcular_estado(
     
     def _classificar_estado(dias):
         if pd.isna(dias):
-            return "🟢 Ativo"  # Fallback seguro
+            return "⚠️ Data inválida"
         if dias >= threshold_dormente:
             return "💤 Dormente"
         if dias >= threshold_risco:

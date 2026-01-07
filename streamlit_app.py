@@ -49,8 +49,7 @@ ABA_PEDIDOS = "Pedidos Shopify"
 # ======================================================
 @st.cache_data(ttl=1200)  # 20 minutos
 def carregar_clientes():
-return ler_aba(PLANILHA, ABA_CLIENTES)
-
+    return ler_aba(PLANILHA, ABA_CLIENTES)
 
 # ======================================================
 # 🔄 SINCRONIZAÇÃO SHOPIFY
@@ -406,7 +405,7 @@ else:
 # ======================================================
 st.divider()
 st.caption(
-    f"🔄 Cache: 5 minutos | "
+    f"🔄 Cache: 20 minutos | "
     f"📅 Última atualização: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M:%S')} | "
     f"📊 Total de registros: {len(df)}"
 )

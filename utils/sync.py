@@ -47,7 +47,8 @@ def sincronizar_shopify_completo(
     resultado_pedidos = sincronizar_shopify_com_planilha(
         nome_planilha=nome_planilha,
         lote_tamanho=lote_tamanho,
-        data_inicio="2023-01-01T00:00:00-03:00"
+        data_inicio="2023-01-01T00:00:00-03:00",
+        ordem="asc"  # 👈 MAIS ANTIGO → MAIS RECENTE
     )
 
     if resultado_pedidos["status"] != "success":
@@ -126,15 +127,22 @@ def _reagregar_clientes(nome_planilha: str, resultado_pedidos: dict) -> dict:
 def sincronizar_shopify_com_planilha(
     nome_planilha: str,
     lote_tamanho: int,
-    data_inicio: str
+    data_inicio: str,
+    ordem: str = "desc"
 ) -> dict:
+
 
     ids_pedidos = ler_ids_existentes(nome_planilha, "Pedidos Shopify", "Pedido ID")
     ids_ignorados = ler_ids_existentes(nome_planilha, "Pedidos Ignorados", "Pedido ID")
 
     total_processados = total_novos = total_ignorados = 0
 
-    for lote in puxar_pedidos_pagos_em_lotes(lote_tamanho, data_inicio):
+    for lote in puxar_pedidos_pagos_em_lotes(
+        lote_tamanho,
+        data_inicio,
+        ordem=ordem
+    ):
+
         df = pd.DataFrame(lote)
         total_processados += len(df)
 

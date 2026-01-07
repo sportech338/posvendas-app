@@ -99,19 +99,11 @@ def _reagregar_clientes(nome_planilha: str, resultado_pedidos: dict) -> dict:
 
     df_clientes = agregar_por_cliente(df_pedidos)
 
-    from utils.classificacao import calcular_ciclo_medio
-
-    ciclo = calcular_ciclo_medio(df_clientes)
-
-    threshold_risco = ciclo.get("limite_risco", 60)
-    threshold_dormente = ciclo.get("limite_dormente", 120)
-
     df_clientes = calcular_estado(
         df_clientes,
-        threshold_risco=threshold_risco,
-        threshold_dormente=threshold_dormente
+        threshold_risco=60,
+        threshold_dormente=120
     )
-
 
     escrever_aba(
         planilha=nome_planilha,

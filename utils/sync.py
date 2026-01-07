@@ -9,7 +9,8 @@ from utils.sheets import (
     append_aba,
     ler_ids_existentes,
     ler_aba,
-    escrever_aba
+    escrever_aba,
+    ordenar_aba_por_coluna_data
 )
 from utils.classificacao import agregar_por_cliente, calcular_estado
 

@@ -65,14 +65,25 @@ def sincronizar_shopify_completo(
     # 🔒 CONTRATO FIXO
     df_pedidos = df_pedidos[COLUNAS_PEDIDOS]
 
-    # 🧠 CONVERTER E ORDENAR EXPLICITAMENTE (garantia total)
-    df_pedidos["Data de criação"] = pd.to_datetime(
-        df_pedidos["Data de criação"],
-        errors="coerce",
-        utc=True
+    # 1️⃣ Converter para datetime (timezone correto)
+    df_pedidos["Data de criação"] = (
+        pd.to_datetime(
+            df_pedidos["Data de criação"],
+            errors="coerce",
+            utc=True
+        )
+        .dt.tz_convert("America/Sao_Paulo")
+        .dt.tz_localize(None)
     )
 
+    # 2️⃣ Ordenar corretamente
     df_pedidos = df_pedidos.sort_values("Data de criação")
+
+    # 3️⃣ Só AGORA formatar para string BR
+    df_pedidos["Data de criação"] = (
+        df_pedidos["Data de criação"]
+        .dt.strftime("%d/%m/%Y %H:%M")
+    )
 
     # ✍️ SOBRESCREVER A ABA INTEIRA
     escrever_aba(

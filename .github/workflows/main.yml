@@ -1,5 +1,3 @@
-# .github/workflows/main.yml
-
 name: CRON Shopify Sync (15min)
 
 on:
@@ -10,6 +8,12 @@ on:
 jobs:
   sync:
     runs-on: ubuntu-latest
+
+    env:
+      GCP_SERVICE_ACCOUNT_JSON: ${{ secrets.GCP_SERVICE_ACCOUNT_JSON }}
+      SHOPIFY_SHOP_NAME: ${{ secrets.SHOPIFY_SHOP_NAME }}
+      SHOPIFY_ACCESS_TOKEN: ${{ secrets.SHOPIFY_ACCESS_TOKEN }}
+      SHOPIFY_API_VERSION: ${{ secrets.SHOPIFY_API_VERSION }}
 
     steps:
       - name: 📥 Checkout do repositório
@@ -24,14 +28,6 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-
-      # 🔐 CRIAR SECRETS.TOML (FORMA CORRETA)
-      - name: 🔐 Criar secrets do Streamlit
-        run: |
-          mkdir -p .streamlit
-          cat <<EOF > .streamlit/secrets.toml
-          ${{ secrets.STREAMLIT_SECRETS_TOML }}
-          EOF
 
       - name: 🔄 Rodar sincronização Shopify
         run: |

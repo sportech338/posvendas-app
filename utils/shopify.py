@@ -1,7 +1,7 @@
 # utils/shopify.py
 
 import requests
-import streamlit as st
+from utils.config import get_shopify_config
 import time
 import hmac
 import hashlib
@@ -46,16 +46,15 @@ def puxar_pedidos_pagos_em_lotes(
     # =========================
     # CONFIG SHOPIFY (secrets)
     # =========================
-    try:
-        shop = st.secrets["shopify"]["shop_name"]
-        token = st.secrets["shopify"]["access_token"]
-        version = st.secrets["shopify"]["API_VERSION"]
-    except KeyError as e:
-        raise ValueError(
-            f"❌ Configuração Shopify ausente: {e}\n"
-            "Verifique se st.secrets contém 'shopify.shop_name', "
-            "'shopify.access_token' e 'shopify.API_VERSION'"
-        )
+    cfg = get_shopify_config()
+    
+    shop = cfg["shop_name"]
+    token = cfg["access_token"]
+    version = cfg["api_version"]
+    
+    if not all([shop, token, version]):
+        raise ValueError("❌ Variáveis SHOPIFY_* não configuradas")
+
 
     base_url = f"https://{shop}/admin/api/{version}/orders.json"
 
@@ -75,7 +74,6 @@ def puxar_pedidos_pagos_em_lotes(
 
     buffer = []
     url = base_url
-    total_pedidos = 0
 
     # =========================
     # LOOP DE PAGINAÇÃO
@@ -180,12 +178,11 @@ def buscar_pedido_por_id(pedido_id: str) -> Optional[Dict]:
         >>> pedido = buscar_pedido_por_id("123456789")
         >>> print(pedido["Customer ID"])
     """
-    try:
-        shop = st.secrets["shopify"]["shop_name"]
-        token = st.secrets["shopify"]["access_token"]
-        version = st.secrets["shopify"]["API_VERSION"]
-    except KeyError as e:
-        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    cfg = get_shopify_config()
+    
+    shop = cfg["shop_name"]
+    token = cfg["access_token"]
+    version = cfg["api_version"]
     
     url = f"https://{shop}/admin/api/{version}/orders/{pedido_id}.json"
     
@@ -290,12 +287,11 @@ def criar_webhook(topico: str, url_callback: str) -> Optional[Dict]:
         >>> )
         >>> print(f"Webhook ID: {webhook['id']}")
     """
-    try:
-        shop = st.secrets["shopify"]["shop_name"]
-        token = st.secrets["shopify"]["access_token"]
-        version = st.secrets["shopify"]["API_VERSION"]
-    except KeyError as e:
-        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    cfg = get_shopify_config()
+    
+    shop = cfg["shop_name"]
+    token = cfg["access_token"]
+    version = cfg["api_version"]
     
     url = f"https://{shop}/admin/api/{version}/webhooks.json"
     
@@ -345,12 +341,11 @@ def listar_webhooks() -> List[Dict]:
         >>> for w in webhooks:
         >>>     print(f"{w['topic']} → {w['address']}")
     """
-    try:
-        shop = st.secrets["shopify"]["shop_name"]
-        token = st.secrets["shopify"]["access_token"]
-        version = st.secrets["shopify"]["API_VERSION"]
-    except KeyError as e:
-        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    cfg = get_shopify_config()
+    
+    shop = cfg["shop_name"]
+    token = cfg["access_token"]
+    version = cfg["api_version"]
     
     url = f"https://{shop}/admin/api/{version}/webhooks.json"
     
@@ -386,12 +381,11 @@ def deletar_webhook(webhook_id: int) -> bool:
     Exemplo:
         >>> deletar_webhook(123456789)
     """
-    try:
-        shop = st.secrets["shopify"]["shop_name"]
-        token = st.secrets["shopify"]["access_token"]
-        version = st.secrets["shopify"]["API_VERSION"]
-    except KeyError as e:
-        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    cfg = get_shopify_config()
+    
+    shop = cfg["shop_name"]
+    token = cfg["access_token"]
+    version = cfg["api_version"]
     
     url = f"https://{shop}/admin/api/{version}/webhooks/{webhook_id}.json"
     
@@ -502,12 +496,11 @@ def contar_pedidos_pagos(
     
     Útil para verificar se há novos pedidos antes de sincronizar.
     """
-    try:
-        shop = st.secrets["shopify"]["shop_name"]
-        token = st.secrets["shopify"]["access_token"]
-        version = st.secrets["shopify"]["API_VERSION"]
-    except KeyError as e:
-        raise ValueError(f"❌ Configuração Shopify ausente: {e}")
+    cfg = get_shopify_config()
+    
+    shop = cfg["shop_name"]
+    token = cfg["access_token"]
+    version = cfg["api_version"]
     
     url = f"https://{shop}/admin/api/{version}/orders/count.json"
     

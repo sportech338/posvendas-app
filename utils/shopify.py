@@ -74,6 +74,7 @@ def puxar_pedidos_pagos_em_lotes(
 
     buffer = []
     url = base_url
+    total_pedidos = 0
 
     # =========================
     # LOOP DE PAGINAÇÃO

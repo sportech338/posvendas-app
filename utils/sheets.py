@@ -369,3 +369,57 @@ def aba_existe(planilha: str, aba: str) -> bool:
         return True
     except gspread.WorksheetNotFound:
         return False
+
+
+# ======================================================
+# ORDENAR ABA POR COLUNA DE DATA (NATIVO GOOGLE SHEETS)
+# ======================================================
+def ordenar_aba_por_coluna_data(
+    planilha: str,
+    aba: str,
+    coluna_data: str,
+    descending: bool = True
+):
+    """
+    Ordena uma aba do Google Sheets pela coluna de data,
+    mantendo o cabeçalho na primeira linha.
+
+    Usa ordenação NATIVA do Sheets (rápida, sem reescrever dados).
+
+    Args:
+        planilha: Nome da planilha
+        aba: Nome da aba
+        coluna_data: Nome da coluna (ex: "Data de criação")
+        descending: True = mais recente no topo
+    """
+    sh = abrir_planilha(planilha)
+    ws = sh.worksheet(aba)
+
+    # Cabeçalho
+    headers = ws.row_values(1)
+
+    if coluna_data not in headers:
+        raise ValueError(
+            f"❌ Coluna '{coluna_data}' não encontrada na aba '{aba}'"
+        )
+
+    coluna_index = headers.index(coluna_data) + 1  # Sheets é 1-based
+
+    last_row = ws.get_last_row()
+    last_col = ws.get_last_column()
+
+    # Nada para ordenar
+    if last_row <= 2:
+        return
+
+    # Range dinâmico (A2 até última coluna/linha)
+    inicio_col = "A"
+    fim_col = chr(64 + last_col)
+
+    ws.sort(
+        sort_specs=[{
+            "dimensionIndex": coluna_index - 1,
+            "sortOrder": "DESCENDING" if descending else "ASCENDING"
+        }],
+        range=f"{inicio_col}2:{fim_col}{last_row}"
+    )

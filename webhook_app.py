@@ -1,43 +1,23 @@
 # webhook_app.py
 
-from fastapi import FastAPI, Request, Header, HTTPException
+from fastapi import FastAPI, Request
 import json
-import os
 import pandas as pd
 
-from utils.shopify import (
-    validar_webhook_shopify,
-    buscar_pedido_por_id
-)
+from utils.shopify import buscar_pedido_por_id
 from utils.sheets import append_aba, ler_ids_existentes
 from utils.sync import COLUNAS_PEDIDOS
 
 app = FastAPI()
 
-# 🔐 SECRET DA SHOPIFY (VEM DO RENDER)
-SHOPIFY_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET")
-if not SHOPIFY_SECRET:
-    raise RuntimeError("❌ SHOPIFY_WEBHOOK_SECRET não definido no ambiente")
-
 PLANILHA = "Clientes Shopify"
 
 
 @app.post("/webhooks/orders/paid")
-async def webhook_orders_paid(
-    request: Request,
-    x_shopify_hmac_sha256: str = Header(None)
-):
+async def webhook_orders_paid(request: Request):
     raw_body = await request.body()
-
-    # 🔐 Validar assinatura do webhook
-    if not validar_webhook_shopify(
-        data=raw_body,
-        hmac_header=x_shopify_hmac_sha256,
-        secret=SHOPIFY_SECRET
-    ):
-        raise HTTPException(status_code=401, detail="Webhook inválido")
-
     payload = json.loads(raw_body)
+
     pedido_id = str(payload.get("id"))
 
     if not pedido_id:

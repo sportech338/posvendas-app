@@ -1,6 +1,6 @@
 # .github/workflows/main.yml
 
-name: CRON Shopify Sync (15min)
+name: CRON Shopify Sync (20min)
 
 on:
   schedule:

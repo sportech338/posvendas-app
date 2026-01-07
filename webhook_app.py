@@ -2,6 +2,8 @@
 
 from fastapi import FastAPI, Request, Header, HTTPException
 import json
+import os
+import pandas as pd
 
 from utils.shopify import (
     validar_webhook_shopify,
@@ -10,11 +12,13 @@ from utils.shopify import (
 from utils.sheets import append_aba, ler_ids_existentes
 from utils.sync import COLUNAS_PEDIDOS
 
-import streamlit as st
-
 app = FastAPI()
 
-SHOPIFY_SECRET = st.secrets["shopify"]["webhook_secret"]
+# 🔐 SECRET DA SHOPIFY (VEM DO RENDER)
+SHOPIFY_SECRET = os.getenv("SHOPIFY_WEBHOOK_SECRET")
+if not SHOPIFY_SECRET:
+    raise RuntimeError("❌ SHOPIFY_WEBHOOK_SECRET não definido no ambiente")
+
 PLANILHA = "Clientes Shopify"
 
 
@@ -25,7 +29,7 @@ async def webhook_orders_paid(
 ):
     raw_body = await request.body()
 
-    # 🔐 Validar assinatura
+    # 🔐 Validar assinatura do webhook
     if not validar_webhook_shopify(
         data=raw_body,
         hmac_header=x_shopify_hmac_sha256,
@@ -49,7 +53,7 @@ async def webhook_orders_paid(
     if pedido_id in ids_existentes:
         return {"status": "duplicate"}
 
-    # 🔎 Buscar pedido completo
+    # 🔎 Buscar pedido completo na Shopify
     pedido = buscar_pedido_por_id(pedido_id)
 
     if not pedido:

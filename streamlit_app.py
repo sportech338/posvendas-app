@@ -102,6 +102,7 @@ except Exception as e:
 df["Último Pedido"] = pd.to_datetime(
     df["Último Pedido"],
     errors="coerce",
+    dayfirst=True
 )
 
 if df.empty:

@@ -1,5 +1,3 @@
-# cron_sync.py
-
 import logging
 import pandas as pd
 from datetime import timedelta

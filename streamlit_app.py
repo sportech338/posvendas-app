@@ -20,12 +20,13 @@ st.set_page_config(
 )
 
 # ==============================
-# AUTO-REFRESH A CADA 10 MIN
+# AUTO-REFRESH A CADA 30 MIN
 # ==============================
 if "last_refresh" not in st.session_state:
     st.session_state.last_refresh = time.time()
 
-if time.time() - st.session_state.last_refresh > 600:
+# 30 minutos = 1800 segundos
+if time.time() - st.session_state.last_refresh > 1800:
     st.session_state.last_refresh = time.time()
     st.rerun()
 
@@ -46,17 +47,9 @@ ABA_PEDIDOS = "Pedidos Shopify"
 # ======================================================
 # 📦 CARREGAMENTO DOS CLIENTES (JÁ AGREGADOS)
 # ======================================================
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=1200)  # 20 minutos
 def carregar_clientes():
-    """
-    Carrega dados JÁ AGREGADOS da aba 'Clientes Shopify'.
-    
-    Não precisa processar pedidos individualmente, pois a sincronização
-    já fez a agregação e salvou na planilha.
-    
-    TTL: 5 minutos (300 segundos)
-    """
-    return ler_aba(PLANILHA, ABA_CLIENTES)
+return ler_aba(PLANILHA, ABA_CLIENTES)
 
 
 # ======================================================

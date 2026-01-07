@@ -169,9 +169,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     # 7. RESETAR INDEX
     # ======================================================
     df_clientes = df_clientes.reset_index(drop=True)
-    
-    df_clientes = calcular_estado(df_clientes)
-    
+    AC    
     return df_clientes
 
 

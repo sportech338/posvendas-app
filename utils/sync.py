@@ -238,6 +238,17 @@ def sincronizar_shopify_com_planilha(
         # 🔒 GARANTIR CONTRATO DA ABA
         df_validos = df_validos[COLUNAS_PEDIDOS]
 
+        df_validos["Data de criação"] = (
+            pd.to_datetime(
+                df_validos["Data de criação"],
+                errors="coerce",
+                utc=True
+            )
+            .dt.tz_convert("America/Sao_Paulo")
+            .dt.tz_localize(None)
+            .dt.strftime("%d/%m/%Y %H:%M")
+        )
+        
         append_aba(nome_planilha, "Pedidos Shopify", df_validos)
         ids_pedidos.update(df_validos["Pedido ID"])
         total_novos += len(df_validos)

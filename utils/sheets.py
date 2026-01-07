@@ -13,22 +13,32 @@ from typing import Set
 # ======================================================
 def conectar_google_sheets():
     """
-    Conecta no Google Sheets usando GCP_SERVICE_ACCOUNT_JSON (env).
-    Compatível com GitHub Actions / CRON.
+    Conecta no Google Sheets.
+    Compatível com:
+    - Streamlit Cloud (st.secrets)
+    - GitHub Actions / CRON (env)
     """
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
 
-    raw = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
-    if not raw:
-        raise ValueError("❌ GCP_SERVICE_ACCOUNT_JSON não definido")
-
+    # 1️⃣ Tentar Streamlit secrets (painel)
     try:
+        import streamlit as st
+        if "gcp_service_account" in st.secrets:
+            service_account_info = dict(st.secrets["gcp_service_account"])
+        else:
+            raise KeyError
+    except Exception:
+        # 2️⃣ Fallback para ENV (CRON / GitHub Actions)
+        raw = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+        if not raw:
+            raise ValueError(
+                "❌ Credenciais Google não encontradas "
+                "(nem st.secrets nem variável de ambiente)"
+            )
         service_account_info = json.loads(raw)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"❌ JSON inválido em GCP_SERVICE_ACCOUNT_JSON: {e}")
 
     creds = Credentials.from_service_account_info(
         service_account_info,

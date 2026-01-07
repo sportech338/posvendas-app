@@ -103,8 +103,8 @@ def _reagregar_clientes(nome_planilha: str, resultado_pedidos: dict) -> dict:
 
     ciclo = calcular_ciclo_medio(df_clientes)
 
-    threshold_risco = ciclo.get("threshold_ativo") or 60
-    threshold_dormente = ciclo.get("threshold_risco") or 120
+    threshold_risco = ciclo.get("threshold_ativo", 60)
+    threshold_dormente = ciclo.get("threshold_risco", 120)
 
     df_clientes = calcular_estado(
         df_clientes,

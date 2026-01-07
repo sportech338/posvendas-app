@@ -139,7 +139,7 @@ if colunas_faltantes:
 # ======================================================
 # 📊 ANÁLISE DE CICLO DE COMPRA
 # ======================================================
-with st.expander("📊 Análise de Ciclo de Compra — Ajustar Thresholds", expanded=False):
+with st.expander("📊 Análise de Ciclo de Compra (referência estratégica)", expanded=False):
     st.write("### Validação dos critérios de classificação")
     
     try:
@@ -185,12 +185,14 @@ with st.expander("📊 Análise de Ciclo de Compra — Ajustar Thresholds", expa
                 )
             
             st.info(
-                f"📌 **Atualmente usando:** "
-                f"🟢 Ativo < 60 dias | "
-                f"🚨 Em risco 60–120 dias | "
-                f"💤 Dormente ≥ 120 dias\n\n"
-                f"💡 Para ajustar, modifique os thresholds em `utils/sync.py` na função `sincronizar_shopify_completo()`"
+                "📌 **Classificação operacional fixa:**\n\n"
+                "🟢 Ativo < 60 dias\n"
+                "🚨 Em risco 60–120 dias\n"
+                "💤 Dormente ≥ 120 dias\n\n"
+                "ℹ️ Esta é uma decisão de negócio e não é alterada "
+                "pela análise estatística acima."
             )
+
 
         else:
             st.warning(

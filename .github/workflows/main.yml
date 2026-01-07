@@ -25,10 +25,13 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 🔐 CRIAR SECRETS.TOML (FORMA CORRETA)
       - name: 🔐 Criar secrets do Streamlit
         run: |
           mkdir -p .streamlit
-          echo "${{ secrets.STREAMLIT_SECRETS_TOML }}" > .streamlit/secrets.toml
+          cat <<EOF > .streamlit/secrets.toml
+${{ secrets.STREAMLIT_SECRETS_TOML }}
+EOF
 
       - name: 🔄 Rodar sincronização Shopify
         run: |

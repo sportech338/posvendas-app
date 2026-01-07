@@ -13,35 +13,9 @@ from typing import Generator, Dict, List, Optional
 # ======================================================
 def puxar_pedidos_pagos_em_lotes(
     lote_tamanho: int = 500,
-    data_inicio: str = "2023-01-01T00:00:00-03:00"
+    data_inicio: str = "2023-01-01T00:00:00-03:00",
+    ordem: str = "desc"  # 👈 NOVO (desc = padrão atual)
 ) -> Generator[List[Dict], None, None]:
-    """
-    Busca TODOS os pedidos pagos da Shopify a partir de uma data
-    e retorna os dados em lotes (ex: 500 em 500).
-
-    Parâmetros:
-    - lote_tamanho: Quantidade de pedidos por lote (padrão: 500)
-    - data_inicio: Data mínima no formato ISO 8601 (padrão: 01/01/2023)
-
-    🔒 IMPORTANTE:
-    - Datas retornadas são ISO 8601 (Shopify padrão)
-    - Timezone é preservado da Shopify
-    - NÃO converte datas
-    - NÃO formata valores para pt-BR
-    
-    Exemplo de data retornada:
-    "2026-01-03T21:50:37-03:00"
-
-    A conversão de datas/valores é responsabilidade da camada de visualização.
-    
-    Yields:
-    Lista de dicionários com pedidos (lotes de até `lote_tamanho` pedidos)
-    
-    Exemplo de uso:
-    >>> for lote in puxar_pedidos_pagos_em_lotes(lote_tamanho=100):
-    >>>     df = pd.DataFrame(lote)
-    >>>     processar(df)
-    """
 
     # =========================
     # CONFIG SHOPIFY (secrets)
@@ -65,12 +39,13 @@ def puxar_pedidos_pagos_em_lotes(
 
     # ⚠️ PARAMS APENAS NA PRIMEIRA REQUEST
     params = {
-        "financial_status": "paid",      # Apenas pedidos pagos
-        "status": "any",                 # Qualquer status (aberto/fechado)
-        "limit": 250,                    # Máximo permitido pela Shopify API
-        "created_at_min": data_inicio,   # Data mínima de criação
-        "order": "created_at desc"       # Mais novos primeiro
+        "financial_status": "paid",
+        "status": "any",
+        "limit": 250,
+        "created_at_min": data_inicio,
+        "order": f"created_at {ordem}"  # 👈 AQUI
     }
+
 
     buffer = []
     url = base_url

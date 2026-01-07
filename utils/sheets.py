@@ -1,8 +1,9 @@
 # utils/sheets.py
 
-import streamlit as st
 import gspread
 import pandas as pd
+import json
+import os
 from google.oauth2.service_account import Credentials
 from typing import Set
 
@@ -10,35 +11,29 @@ from typing import Set
 # ======================================================
 # CONEXÃO GOOGLE SHEETS
 # ======================================================
-@st.cache_resource
 def conectar_google_sheets():
     """
-    Estabelece conexão autenticada com Google Sheets API.
-    
-    Usa credenciais de service account armazenadas em st.secrets.
-    Resultado é cacheado para evitar reconexões desnecessárias.
-    
-    Returns:
-        gspread.Client: Cliente autenticado do Google Sheets
-    
-    Raises:
-        KeyError: Se credenciais não estiverem em st.secrets
+    Conecta no Google Sheets usando GCP_SERVICE_ACCOUNT_JSON (env).
+    Compatível com GitHub Actions / CRON.
     """
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
 
+    raw = os.getenv("GCP_SERVICE_ACCOUNT_JSON")
+    if not raw:
+        raise ValueError("❌ GCP_SERVICE_ACCOUNT_JSON não definido")
+
     try:
-        creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
-            scopes=scopes
-        )
-    except KeyError:
-        raise ValueError(
-            "❌ Credenciais Google ausentes!\n"
-            "Adicione 'gcp_service_account' em st.secrets"
-        )
+        service_account_info = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"❌ JSON inválido em GCP_SERVICE_ACCOUNT_JSON: {e}")
+
+    creds = Credentials.from_service_account_info(
+        service_account_info,
+        scopes=scopes
+    )
 
     return gspread.authorize(creds)
 
@@ -46,32 +41,18 @@ def conectar_google_sheets():
 # ======================================================
 # ABRIR PLANILHA (CACHEADO)
 # ======================================================
-@st.cache_resource
 def abrir_planilha(nome_planilha: str):
     """
     Abre uma planilha do Google Sheets pelo nome.
-    
-    Resultado é cacheado para performance.
-    
-    Args:
-        nome_planilha: Nome exato da planilha no Google Drive
-    
-    Returns:
-        gspread.Spreadsheet: Objeto da planilha
-    
-    Raises:
-        gspread.SpreadsheetNotFound: Se planilha não existir
     """
     client = conectar_google_sheets()
-    
+
     try:
         return client.open(nome_planilha)
     except gspread.SpreadsheetNotFound:
         raise FileNotFoundError(
             f"❌ Planilha '{nome_planilha}' não encontrada!\n"
-            f"Verifique se:\n"
-            f"1. O nome está correto\n"
-            f"2. A service account tem acesso à planilha"
+            f"Verifique se a service account tem acesso."
         )
 
 

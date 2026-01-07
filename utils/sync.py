@@ -9,8 +9,7 @@ from utils.sheets import (
     append_aba,
     ler_ids_existentes,
     ler_aba,
-    escrever_aba,
-    ordenar_aba_por_coluna_data
+    escrever_aba
 )
 from utils.classificacao import agregar_por_cliente, calcular_estado
 
@@ -197,17 +196,6 @@ def sincronizar_shopify_com_planilha(
         append_aba(nome_planilha, "Pedidos Shopify", df_validos)
         ids_pedidos.update(df_validos["Pedido ID"])
         total_novos += len(df_validos)
-
-    # ==================================================
-    # 🔽 ORDENAR PEDIDOS POR DATA (MAIS RECENTE NO TOPO)
-    # ==================================================
-    if total_novos > 0:
-        ordenar_aba_por_coluna_data(
-            planilha=nome_planilha,
-            aba="Pedidos Shopify",
-            coluna_data="Data de criação",
-            descending=True
-        )
 
     return {
         "status": "success",

@@ -1,10 +1,10 @@
 # .github/workflows/main.yml
 
-name: CRON Shopify Sync (20min)
+name: CRON Shopify Sync (30min)
 
 on:
   schedule:
-    - cron: "*/20 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:

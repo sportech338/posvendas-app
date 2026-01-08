@@ -56,19 +56,13 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     df_pedidos["Customer ID"] = (
         df_pedidos["Customer ID"]
         .astype(str)
+        .replace("nan", "")
         .str.replace(".0", "", regex=False)
         .str.strip()
     )
 
-    df_pedidos["Customer ID"] = (
-        df_pedidos["Customer ID"]
-        .astype(str)
-        .str.strip()
-    )
+    df_pedidos = df_pedidos[df_pedidos["Customer ID"] != ""]
 
-    df_pedidos = df_pedidos[
-        df_pedidos["Customer ID"] != ""
-    ]
     
     # ======================================================
     # 2. AGREGAÇÃO
@@ -78,7 +72,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         .groupby("Customer ID", as_index=False)
         .agg(
             Cliente=("Cliente", "last"),
-            Email=("Email", "last"),
+            Email=("Email", lambda x: x.dropna().iloc[-1] if not x.dropna().empty else ""),
             Qtd_Pedidos=("Pedido ID", "count"),
             Valor_Total=("Valor Total", "sum"),
             Primeiro_Pedido=("Data de criação", "min"),
@@ -199,9 +193,8 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
         dict: {
             "ciclo_mediana": float | None,
             "ciclo_media": float | None,
-            "threshold_ativo": int,
-            "threshold_risco": int,
-            "threshold_dormente": int,
+            "limite_risco": int,
+            "limite_dormente": int,
             "total_recorrentes": int
         }
     

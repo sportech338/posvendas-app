@@ -94,30 +94,27 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     # 3. CALCULAR DIAS SEM COMPRAR
     # ======================================================
     df_clientes = df_clientes.copy()
-
+    
     df_clientes["Último Pedido"] = pd.to_datetime(
         df_clientes["Último Pedido"],
         errors="coerce"
     )
 
-    # Marcar registros com problema de data (debug explícito)
-    df_clientes["Erro Data Último Pedido"] = df_clientes["Último Pedido"].isna()
-
     hoje = pd.Timestamp.now(
         tz=pytz.timezone("America/Sao_Paulo")
     ).tz_localize(None)
-
+    
     df_clientes["Dias sem comprar"] = (
         hoje - df_clientes["Último Pedido"]
     ).dt.days
-
-    # 👇 ESTA LINHA ENTRA AQUI (mesma identação)
+    
+    # Datas inválidas ficam como NaN
     df_clientes.loc[
-        df_clientes["Erro Data Último Pedido"],
+        df_clientes["Último Pedido"].isna(),
         "Dias sem comprar"
     ] = None
-
-    # Garantir que não há valores negativos (edge case)
+    
+    # Garantir que não há valores negativos
     df_clientes["Dias sem comprar"] = (
         df_clientes["Dias sem comprar"].clip(lower=0)
     )

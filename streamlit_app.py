@@ -103,6 +103,8 @@ if df.empty:
     st.warning("⚠️ Nenhum cliente encontrado. Execute a sincronização primeiro.")
     st.stop()
 
+df["Telefone"] = df["Telefone"].astype(str).replace("nan", "").str.strip()
+
 # ======================================================
 # 🔢 GARANTIR QUE "Dias sem comprar" É NUMÉRICO
 # ======================================================
@@ -134,7 +136,8 @@ df.columns = df.columns.str.strip()
 colunas_obrigatorias = [
     "Customer ID",
     "Cliente", 
-    "Email", 
+    "Email",
+    "Telefone",
     "Estado", 
     "Nível",
     "Qtd Pedidos", 
@@ -254,6 +257,7 @@ st.divider()
 # ======================================================
 COLUNAS_DISPLAY = [
     "Cliente",
+    "Telefone",
     "Email",
     "Estado Operacional",
     "Nível",

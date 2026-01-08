@@ -103,7 +103,9 @@ def puxar_pedidos_pagos_em_lotes(
             pedido = {
                 "Pedido ID": str(o.get("id", "")),
                 "Data de criação": o.get("created_at"),  # ISO 8601
-                "Customer ID": str(customer.get("id", "")),
+                "Customer ID": str(
+                    customer.get("id") or o.get("email") or ""
+                ),"Customer ID": str(customer.get("id", "")),
                 "Cliente": _extrair_nome_cliente(customer, shipping),
                 "Email": o.get("email") or "",
                 "Valor Total": float(o.get("total_price", 0)),

@@ -193,8 +193,12 @@ with st.expander("📊 Análise de Ciclo de Compra (referência estratégica)", 
                 f"(encontrados: {ciclo['total_recorrentes']}, mínimo: 5)"
             )
             st.info(
-                "Os thresholds atuais (60/120 dias) seguem o padrão operacional definido. "
-                "A análise acima serve apenas como referência estratégica."
+                "Enquanto a base recorrente ainda é pequena, o sistema utiliza "
+                "thresholds de segurança para evitar distorções. "
+                "Assim que houver dados suficientes, a classificação passa a ser "
+                "100% baseada no comportamento real da base."
+            )
+
             )
     except Exception as e:
         st.error(f"❌ Erro ao calcular ciclo de compra: {str(e)}")

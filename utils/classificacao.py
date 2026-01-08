@@ -73,7 +73,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         .agg(
             Cliente=("Cliente", "last"),
             Email=("Email", lambda x: x.dropna().iloc[-1] if not x.dropna().empty else ""),
-            Qtd_Pedidos=("Pedido ID", "count"),
+            Qtd_Pedidos=("Pedido ID", pd.Series.nunique)
             Valor_Total=("Valor Total", "sum"),
             Primeiro_Pedido=("Data de criação", "min"),
             Ultimo_Pedido=("Data de criação", "max"),

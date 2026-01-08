@@ -11,7 +11,7 @@ from utils.sheets import (
     ler_aba,
     escrever_aba
 )
-from utils.classificacao import agregar_por_cliente, calcular_estado
+from utils.classificacao import agregar_por_cliente, calcular_estado, calcular_ciclo_medio
 
 
 # ======================================================
@@ -145,11 +145,11 @@ def _reagregar_clientes(nome_planilha: str, resultado_pedidos: dict) -> dict:
 
     df_clientes = agregar_por_cliente(df_pedidos)
 
-    df_clientes = calcular_estado(
-        df_clientes,
-        threshold_risco=60,
-        threshold_dormente=120
-    )
+    # 📊 Calcular ciclo médio real com base na planilha
+    ciclo = calcular_ciclo_medio(df_clientes)
+
+    threshold_risco = ciclo["limite_risco"] or 60
+    threshold_dormente = ciclo["limite_dormente"] or 120
 
     escrever_aba(
         planilha=nome_planilha,

@@ -14,7 +14,7 @@ from typing import Generator, Dict, List, Optional
 def puxar_pedidos_pagos_em_lotes(
     lote_tamanho: int = 500,
     data_inicio: str = "2023-01-01T00:00:00-03:00",
-    ordem: str = "desc"  # 👈 NOVO (desc = padrão atual)
+    ordem: str = "desc"
 ) -> Generator[List[Dict], None, None]:
 
     # =========================
@@ -29,7 +29,6 @@ def puxar_pedidos_pagos_em_lotes(
     if not all([shop, token, version]):
         raise ValueError("❌ Variáveis SHOPIFY_* não configuradas")
 
-
     base_url = f"https://{shop}/admin/api/{version}/orders.json"
 
     headers = {
@@ -43,98 +42,80 @@ def puxar_pedidos_pagos_em_lotes(
         "status": "any",
         "limit": 250,
         "created_at_min": data_inicio,
-        "order": f"created_at {ordem}"  # 👈 AQUI
+        "order": f"created_at {ordem}"
     }
-
 
     buffer = []
     url = base_url
-    total_pedidos = 0
 
     # =========================
     # LOOP DE PAGINAÇÃO
     # =========================
     while url:
-        try:
-            response = requests.get(
-                url,
-                headers=headers,
-                params=params,
-                timeout=30
-            )
+        response = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=30
+        )
 
-            # =========================
-            # RATE LIMIT SHOPIFY (429)
-            # =========================
-            if response.status_code == 429:
-                retry_after = int(response.headers.get("Retry-After", 2))
-                time.sleep(retry_after)
-                continue
+        # RATE LIMIT
+        if response.status_code == 429:
+            time.sleep(int(response.headers.get("Retry-After", 2)))
+            continue
 
-            # =========================
-            # TRATAMENTO DE ERROS HTTP
-            # =========================
-            if response.status_code != 200:
-                raise requests.HTTPError(
-                    f"Shopify API retornou status {response.status_code}: "
-                    f"{response.text}"
-                )
+        response.raise_for_status()
 
-            response.raise_for_status()
-
-        except requests.exceptions.RequestException as e:
-            raise ConnectionError(
-                f"❌ Erro ao conectar com Shopify API: {str(e)}"
-            )
+        orders = response.json().get("orders", [])
+        if not orders:
+            break
 
         # =========================
         # PROCESSAR PEDIDOS
         # =========================
-        orders = response.json().get("orders", [])
-
-        if not orders:
-            break
-
         for o in orders:
             customer = o.get("customer") or {}
             shipping = o.get("shipping_address") or {}
+            billing = o.get("billing_address") or {}
 
-            # Extrair dados do pedido
+            telefone = (
+                customer.get("phone")
+                or shipping.get("phone")
+                or billing.get("phone")
+                or ""
+            )
+
             pedido = {
                 "Pedido ID": str(o.get("id", "")),
-                "Data de criação": o.get("created_at"),  # ISO 8601
+                "Data de criação": o.get("created_at"),
                 "Customer ID": str(customer.get("id") or o.get("email") or ""),
                 "Cliente": _extrair_nome_cliente(customer, shipping),
                 "Email": o.get("email") or "",
+                "Telefone": telefone,
                 "Valor Total": float(o.get("total_price", 0)),
                 "Pedido": o.get("order_number"),
-    
-                # Campos internos
                 "Financial Status": o.get("financial_status"),
                 "Cancelled At": o.get("cancelled_at"),
                 "Total Refunded": float(o.get("total_refunded", 0))
             }
 
             buffer.append(pedido)
-            total_pedidos += 1
 
-            # 🔹 Entrega lote quando atinge o tamanho definido
             if len(buffer) >= lote_tamanho:
                 yield buffer
                 buffer = []
 
         # =========================
-        # PAGINAÇÃO SHOPIFY (Link header)
+        # PAGINAÇÃO (FORA DO LOOP)
         # =========================
         url = _extrair_proxima_pagina(response.headers.get("Link"))
-        params = {}  # Params só na primeira request
+        params = {}  # só na primeira request
 
     # =========================
-    # ENTREGAR ÚLTIMO LOTE (se houver)
+    # ENTREGAR RESTO FINAL
     # =========================
     if buffer:
         yield buffer
-
 
 # ======================================================
 # BUSCAR PEDIDO INDIVIDUAL (PARA WEBHOOK)

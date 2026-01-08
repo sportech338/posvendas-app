@@ -60,12 +60,16 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         .str.strip()
     )
 
-    # 🔒 Usar APENAS pedidos com Customer ID válido
-    df_pedidos = df_pedidos[
-        df_pedidos["Customer ID"].notna() &
-        (df_pedidos["Customer ID"].astype(str).str.strip() != "")
-    ]
+    df_pedidos["Customer ID"] = (
+        df_pedidos["Customer ID"]
+        .astype(str)
+        .str.strip()
+    )
 
+    df_pedidos = df_pedidos[
+        df_pedidos["Customer ID"] != ""
+    ]
+    
     # ======================================================
     # 2. AGREGAÇÃO
     # ======================================================

@@ -199,7 +199,6 @@ with st.expander("📊 Análise de Ciclo de Compra (referência estratégica)", 
                 "100% baseada no comportamento real da base."
             )
 
-            )
     except Exception as e:
         st.error(f"❌ Erro ao calcular ciclo de compra: {str(e)}")
 

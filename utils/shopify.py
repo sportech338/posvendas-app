@@ -103,15 +103,13 @@ def puxar_pedidos_pagos_em_lotes(
             pedido = {
                 "Pedido ID": str(o.get("id", "")),
                 "Data de criação": o.get("created_at"),  # ISO 8601
-                "Customer ID": str(
-                    customer.get("id") or o.get("email") or ""
-                ),"Customer ID": str(customer.get("id", "")),
+                "Customer ID": str(customer.get("id") or o.get("email") or ""),
                 "Cliente": _extrair_nome_cliente(customer, shipping),
                 "Email": o.get("email") or "",
                 "Valor Total": float(o.get("total_price", 0)),
                 "Pedido": o.get("order_number"),
-                
-                # Campos internos (usados para filtrar cancelados/reembolsados)
+    
+                # Campos internos
                 "Financial Status": o.get("financial_status"),
                 "Cancelled At": o.get("cancelled_at"),
                 "Total Refunded": float(o.get("total_refunded", 0))

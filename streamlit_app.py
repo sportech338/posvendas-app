@@ -104,6 +104,14 @@ if df.empty:
     st.stop()
 
 # ======================================================
+# 🔢 GARANTIR QUE "Dias sem comprar" É NUMÉRICO
+# ======================================================
+df["Dias sem comprar"] = pd.to_numeric(
+    df["Dias sem comprar"],
+    errors="coerce"
+)
+
+# ======================================================
 # 🧱 ESTADO OPERACIONAL FIXO (REGRA DA EQUIPE)
 # ======================================================
 def calcular_estado_operacional(dias):

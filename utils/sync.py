@@ -3,6 +3,29 @@
 import pandas as pd
 from datetime import datetime, timedelta
 import pytz
+import re
+
+def normalizar_telefone_br(telefone: str) -> str:
+    if not telefone:
+        return ""
+
+    # remover tudo que não for número
+    digits = re.sub(r"\D", "", telefone)
+
+    # remover 0 inicial
+    if digits.startswith("0"):
+        digits = digits[1:]
+
+    # se já vier com DDI 55
+    if digits.startswith("55"):
+        digits = digits[2:]
+
+    # agora esperamos DDD + número (10 ou 11 dígitos)
+    if len(digits) not in (10, 11):
+        return ""
+
+    return f"+55{digits}"
+
 
 from utils.shopify import puxar_pedidos_pagos_em_lotes
 from utils.sheets import (
@@ -23,6 +46,7 @@ COLUNAS_PEDIDOS = [
     "Customer ID",
     "Cliente",
     "Email",
+    "Telefone",
     "Valor Total",
     "Pedido"
 ]
@@ -36,6 +60,7 @@ COLUNAS_PEDIDOS_IGNORADOS = [
     "Customer ID",
     "Cliente",
     "Email",
+    "Telefone",
     "Valor Total",
     "Pedido",
     "Motivo Ignorado"
@@ -84,6 +109,10 @@ def sincronizar_shopify_completo(
     ):
         df = pd.DataFrame(lote)
 
+        if "Telefone" in df.columns:
+            df["Telefone"] = df["Telefone"].apply(normalizar_telefone_br)
+
+        
         df["Pedido ID"] = (
             df["Pedido ID"]
             .astype(str)
@@ -290,6 +319,11 @@ def sincronizar_shopify_com_planilha(
     ):
 
         df = pd.DataFrame(lote)
+
+        if "Telefone" in df.columns:
+            df["Telefone"] = df["Telefone"].apply(normalizar_telefone_br)
+
+        
         total_processados += len(df)
 
         if df.empty:

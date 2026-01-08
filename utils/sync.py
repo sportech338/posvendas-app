@@ -27,6 +27,19 @@ COLUNAS_PEDIDOS = [
     "Pedido"
 ]
 
+# ======================================================
+# 🔒 CONTRATO FIXO — PEDIDOS IGNORADOS
+# ======================================================
+COLUNAS_PEDIDOS_IGNORADOS = [
+    "Pedido ID",
+    "Data de criação",
+    "Customer ID",
+    "Cliente",
+    "Email",
+    "Valor Total",
+    "Pedido",
+    "Motivo Ignorado"
+]
 
 # ======================================================
 # UTIL — DATA DE INÍCIO (ONTEM 00:00)
@@ -211,23 +224,58 @@ def sincronizar_shopify_com_planilha(
             .str.strip()
         )
 
+        def identificar_motivo(row):
+            if pd.notna(row.get("Cancelled At")):
+                return "cancelado"
+            if row.get("Total Refunded", 0) >= row.get("Valor Total", 0):
+                return "reembolso"
+            return "chargeback"
+
+        
         # ==================================================
-        # 🚫 CANCELADOS / REEMBOLSADOS
+        # 🚫 CANCELADOS / REEMBOLSADOS / ESTORNADOS
         # ==================================================
         df_cancelados = df[
             (df.get("Cancelled At").notna()) |
             (df.get("Total Refunded", 0) >= df.get("Valor Total", 0))
-        ]
-
-        df_cancelados = df_cancelados[
-            ~df_cancelados["Pedido ID"].isin(ids_ignorados)
-        ]
+        ].copy()
 
         if not df_cancelados.empty:
-            df_cancelados = df_cancelados[COLUNAS_PEDIDOS]
-            append_aba(nome_planilha, "Pedidos Ignorados", df_cancelados)
-            ids_ignorados.update(df_cancelados["Pedido ID"])
-            total_ignorados += len(df_cancelados)
+            # Definir motivo
+            df_cancelados["Motivo Ignorado"] = df_cancelados.apply(
+                identificar_motivo,
+                axis=1
+            )
+
+            # Remover os que já foram ignorados antes
+            df_cancelados = df_cancelados[
+                ~df_cancelados["Pedido ID"].isin(ids_ignorados)
+            ]
+
+            if not df_cancelados.empty:
+                # Normalizar data (mesmo padrão da aba Pedidos Shopify)
+                df_cancelados["Data de criação"] = (
+                    pd.to_datetime(
+                        df_cancelados["Data de criação"],
+                        errors="coerce",
+                        utc=True
+                    )
+                    .dt.tz_convert("America/Sao_Paulo")
+                    .dt.tz_localize(None)
+                    .dt.strftime("%Y-%m-%d %H:%M:%S")
+                )
+
+                # Garantir contrato da aba
+                df_cancelados = df_cancelados[COLUNAS_PEDIDOS_IGNORADOS]
+
+                append_aba(
+                    planilha=nome_planilha,
+                    aba="Pedidos Ignorados",
+                    df=df_cancelados
+                )
+
+                ids_ignorados.update(df_cancelados["Pedido ID"])
+                total_ignorados += len(df_cancelados)
 
         # ==================================================
         # ✅ PEDIDOS VÁLIDOS

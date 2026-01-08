@@ -4,6 +4,16 @@ import pandas as pd
 import pytz
 from typing import Dict, List
 
+def _telefone_mais_recente(series: pd.Series) -> str:
+    validos = (
+        series
+        .dropna()
+        .astype(str)
+        .str.strip()
+    )
+    validos = validos[validos != ""]
+    return validos.iloc[-1] if not validos.empty else ""
+
 
 # ======================================================
 # AGREGAÇÃO DE PEDIDOS POR CLIENTE
@@ -43,9 +53,15 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     
     # Validar colunas obrigatórias
     colunas_obrigatorias = [
-        "Pedido ID", "Customer ID", "Cliente", 
-        "Email", "Valor Total", "Data de criação"
+        "Pedido ID",
+        "Customer ID",
+        "Cliente",
+        "Email",
+        "Telefone",
+        "Valor Total",
+        "Data de criação"
     ]
+
     colunas_faltantes = set(colunas_obrigatorias) - set(df_pedidos.columns)
     
     if colunas_faltantes:
@@ -73,6 +89,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         .agg(
             Cliente=("Cliente", "last"),
             Email=("Email", lambda x: x.dropna().iloc[-1] if not x.dropna().empty else ""),
+            Telefone=("Telefone", _telefone_mais_recente),
             Qtd_Pedidos=("Pedido ID", pd.Series.nunique),
             Valor_Total=("Valor Total", "sum"),
             Primeiro_Pedido=("Data de criação", "min"),
@@ -140,6 +157,7 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         "Customer ID",
         "Cliente",
         "Email",
+        "Telefone",
         "Qtd Pedidos",
         "Valor Total",
         "Primeiro Pedido",

@@ -229,7 +229,7 @@ def sincronizar_shopify_com_planilha(
                 return "cancelado"
             if row.get("Total Refunded", 0) >= row.get("Valor Total", 0):
                 return "reembolso"
-            return "chargeback"
+            return "outro"
 
         
         # ==================================================

@@ -52,36 +52,27 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
         raise ValueError(
             f"❌ Colunas obrigatórias ausentes: {', '.join(colunas_faltantes)}"
         )
-    
-    # ======================================================
-    # 1. CRIAR CHAVE ÚNICA (Customer ID)
-    # ======================================================
-    df_pedidos = df_pedidos.copy()  # Evitar SettingWithCopyWarning
-    
-    df_pedidos["cliente_key"] = (
+
+    df_pedidos["Customer ID"] = (
         df_pedidos["Customer ID"]
         .astype(str)
+        .str.replace(".0", "", regex=False)
         .str.strip()
     )
-    
-    # Fallback para clientes sem Customer ID (casos raros)
-    mask_sem_id = df_pedidos["cliente_key"].isin(["", "nan", "None"])
-    df_pedidos.loc[mask_sem_id, "cliente_key"] = (
-        "EMAIL_" + 
-        df_pedidos.loc[mask_sem_id, "Email"]
-        .astype(str)
-        .str.lower()
-        .str.strip()
-    )
-    
+
+    # 🔒 Usar APENAS pedidos com Customer ID válido
+    df_pedidos = df_pedidos[
+        df_pedidos["Customer ID"].notna() &
+        (df_pedidos["Customer ID"].astype(str).str.strip() != "")
+    ]
+
     # ======================================================
     # 2. AGREGAÇÃO
     # ======================================================
     df_clientes = (
         df_pedidos
-        .groupby("cliente_key", as_index=False)
+        .groupby("Customer ID", as_index=False)
         .agg(
-            Customer_ID=("Customer ID", "first"),
             Cliente=("Cliente", "last"),
             Email=("Email", "last"),
             Qtd_Pedidos=("Pedido ID", "count"),
@@ -93,7 +84,6 @@ def agregar_por_cliente(df_pedidos: pd.DataFrame) -> pd.DataFrame:
     
     # Renomear colunas para padrão final
     df_clientes = df_clientes.rename(columns={
-        "Customer_ID": "Customer ID",
         "Valor_Total": "Valor Total",
         "Qtd_Pedidos": "Qtd Pedidos",
         "Primeiro_Pedido": "Primeiro Pedido",

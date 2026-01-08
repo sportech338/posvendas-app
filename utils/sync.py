@@ -151,11 +151,20 @@ def _reagregar_clientes(nome_planilha: str, resultado_pedidos: dict) -> dict:
     threshold_risco = ciclo["limite_risco"] or 60
     threshold_dormente = ciclo["limite_dormente"] or 120
 
+    # ✅ CALCULAR ESTADO DINÂMICO (ESTA LINHA É A CHAVE)
+    df_clientes = calcular_estado(
+        df_clientes,
+        threshold_risco=threshold_risco,
+        threshold_dormente=threshold_dormente
+    )
+    
+    # ✍️ AGORA SIM escrever clientes COM ESTADO
     escrever_aba(
         planilha=nome_planilha,
         aba="Clientes Shopify",
         df=df_clientes
     )
+
 
     return {
         "status": "success",

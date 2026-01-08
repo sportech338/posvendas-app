@@ -238,18 +238,10 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
     
     Comportamento:
     ✅ Preserva tipos numéricos (números ficam como números)
+    🔒 Telefone SEMPRE como texto (não vira moeda)
     ✅ Cria aba automaticamente se não existir
     ✅ Adiciona cabeçalho se aba for nova
     ✅ NaN/None vira string vazia
-    
-    Args:
-        planilha: Nome da planilha
-        aba: Nome da aba
-        df: DataFrame com dados para adicionar
-    
-    Exemplo:
-        >>> novos_pedidos = pd.DataFrame([...])
-        >>> append_aba("Clientes Shopify", "Pedidos Shopify", novos_pedidos)
     """
     if df.empty:
         return
@@ -261,31 +253,36 @@ def append_aba(planilha: str, aba: str, df: pd.DataFrame):
         ws = sh.worksheet(aba)
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
-        # Adicionar cabeçalho
         ws.append_row(df.columns.tolist())
 
-    # ✅ Converter DataFrame para lista preservando tipos
     valores = []
+
     for _, row in df.iterrows():
         linha = []
-        for val in row:
-            # Manter números como números
-            if pd.notna(val) and isinstance(val, (int, float)):
+        for col, val in zip(df.columns, row):
+
+            # 🔒 TELEFONE: força texto no Google Sheets
+            if col == "Telefone":
+                linha.append(f"'{val}" if pd.notna(val) and str(val).strip() else "")
+
+            # ✅ números reais continuam números
+            elif pd.notna(val) and isinstance(val, (int, float)):
                 linha.append(val)
-            # NaN/None vira string vazia
+
+            # vazio
             elif pd.isna(val):
                 linha.append("")
-            # Resto vira string
+
+            # resto vira string
             else:
                 linha.append(str(val))
+
         valores.append(linha)
 
-    # Inserir linhas (USER_ENTERED permite Google Sheets interpretar tipos)
     ws.append_rows(
         valores,
         value_input_option="USER_ENTERED"
     )
-
 
 # ======================================================
 # ESCRITA TOTAL (SOBRESCREVER)
@@ -298,17 +295,9 @@ def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
     
     Comportamento:
     ✅ Preserva tipos numéricos
+    🔒 Telefone SEMPRE como texto (não vira moeda)
     ✅ Cria aba automaticamente se não existir
     ✅ Inclui cabeçalho
-    
-    Args:
-        planilha: Nome da planilha
-        aba: Nome da aba
-        df: DataFrame com TODOS os dados (não incremental)
-    
-    Exemplo:
-        >>> clientes_agregados = pd.DataFrame([...])
-        >>> escrever_aba("Clientes Shopify", "Clientes Shopify", clientes_agregados)
     """
     sh = abrir_planilha(planilha)
 
@@ -318,32 +307,36 @@ def escrever_aba(planilha: str, aba: str, df: pd.DataFrame):
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title=aba, rows=1000, cols=20)
 
-    # Limpar conteúdo anterior
     ws.clear()
-    
-    # ✅ Preparar dados (cabeçalho + linhas)
+
     valores = [df.columns.tolist()]
-    
+
     for _, row in df.iterrows():
         linha = []
-        for val in row:
-            # Manter números como números
-            if pd.notna(val) and isinstance(val, (int, float)):
+        for col, val in zip(df.columns, row):
+
+            # 🔒 TELEFONE: força texto no Google Sheets
+            if col == "Telefone":
+                linha.append(f"'{val}" if pd.notna(val) and str(val).strip() else "")
+
+            # ✅ números reais continuam números
+            elif pd.notna(val) and isinstance(val, (int, float)):
                 linha.append(val)
-            # NaN/None vira string vazia
+
+            # vazio
             elif pd.isna(val):
                 linha.append("")
-            # Resto vira string
+
+            # resto vira string
             else:
                 linha.append(str(val))
+
         valores.append(linha)
-    
-    # Escrever tudo de uma vez
+
     ws.update(
         valores,
         value_input_option="USER_ENTERED"
     )
-
 
 # ======================================================
 # VERIFICAR SE ABA EXISTE

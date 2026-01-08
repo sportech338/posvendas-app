@@ -252,7 +252,7 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
             "ciclo_media": None,
             "limite_risco": 60,
             "limite_dormente": 120,
-            "total_recorrentes": 0
+            "total_recorrentes": len(clientes_recorrentes)
         }
     
     # Calcular dias totais entre primeira e última compra

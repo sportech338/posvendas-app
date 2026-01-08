@@ -82,7 +82,7 @@ def sincronizar_shopify_completo(
     # 3️⃣ Só AGORA formatar para string BR
     df_pedidos["Data de criação"] = (
         df_pedidos["Data de criação"]
-        .dt.strftime("%d/%m/%Y %H:%M")
+        .dt.strftime("%Y-%m-%d %H:%M:%S")
     )
 
     # ✍️ SOBRESCREVER A ABA INTEIRA
@@ -255,7 +255,7 @@ def sincronizar_shopify_com_planilha(
             )
             .dt.tz_convert("America/Sao_Paulo")
             .dt.tz_localize(None)
-            .dt.strftime("%d/%m/%Y %H:%M")
+            .dt.strftime("%Y-%m-%d %H:%M:%S")
         )
         
         append_aba(nome_planilha, "Pedidos Shopify", df_validos)

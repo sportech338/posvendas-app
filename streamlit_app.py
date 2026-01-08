@@ -103,6 +103,19 @@ if df.empty:
     st.warning("⚠️ Nenhum cliente encontrado. Execute a sincronização primeiro.")
     st.stop()
 
+# ======================================================
+# 🧱 ESTADO OPERACIONAL FIXO (REGRA DA EQUIPE)
+# ======================================================
+def calcular_estado_operacional(dias):
+    if pd.isna(dias):
+        return None
+    if dias >= 120:
+        return "💤 Dormente"
+    if dias >= 60:
+        return "🚨 Em risco"
+    return "🟢 Ativo"
+
+df["Estado Operacional"] = df["Dias sem comprar"].apply(calcular_estado_operacional)
 
 # ======================================================
 # 🔧 NORMALIZAÇÃO DE COLUNAS
@@ -234,7 +247,7 @@ st.divider()
 COLUNAS_DISPLAY = [
     "Cliente",
     "Email",
-    "Estado",
+    "Estado Operacional",
     "Nível",
     "Qtd Pedidos",
     "Valor Total",
@@ -293,7 +306,7 @@ with col_filtro1:
 
 df_ativa = (
     df[
-        (df["Estado"] == "🟢 Ativo") &
+        (df["Estado Operacional"] == "🟢 Ativo") &
         (df["Nível"].isin(filtro_ativa))
     ]
     .sort_values("Último Pedido", ascending=False)
@@ -334,7 +347,7 @@ with col_filtro2:
 
 df_risco = (
     df[
-        (df["Estado"] == "🚨 Em risco") &
+        (df["Estado Operacional"] == "🚨 Em risco") &
         (df["Nível"].isin(filtro_risco))
     ]
     .sort_values("Último Pedido", ascending=False)
@@ -375,7 +388,7 @@ with col_filtro3:
 
 df_dormentes = (
     df[
-        (df["Estado"] == "💤 Dormente") &
+        (df["Estado Operacional"] == "💤 Dormente") &
         (df["Nível"].isin(filtro_dormentes))
     ]
     .sort_values("Último Pedido", ascending=False)

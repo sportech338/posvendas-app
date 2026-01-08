@@ -179,14 +179,13 @@ with st.expander("📊 Análise de Ciclo de Compra (referência estratégica)", 
                 )
             
             st.info(
-                "📌 **Classificação operacional fixa:**\n\n"
-                "🟢 Ativo < 60 dias\n"
-                "🚨 Em risco 60–120 dias\n"
-                "💤 Dormente ≥ 120 dias\n\n"
-                "ℹ️ Esta é uma decisão de negócio e não é alterada "
-                "pela análise estatística acima."
+                "📌 **Classificação dinâmica baseada no comportamento real da base:**\n\n"
+                "• O sistema analisa clientes com 2 ou mais pedidos\n"
+                "• Calcula o ciclo mediano de recompra observado\n"
+                "• Classifica cada cliente comparando o tempo sem compra\n"
+                "  com esse ciclo real\n\n"
+                "🧠 Se o padrão de recompra mudar, os estados são atualizados automaticamente."
             )
-
 
         else:
             st.warning(

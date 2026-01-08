@@ -59,13 +59,92 @@ def sincronizar_shopify_completo(
 ) -> dict:
     todos_pedidos = []
 
+    # 🔄 REBUILD TOTAL — limpar pedidos ignorados
+    escrever_aba(
+        planilha=nome_planilha,
+        aba="Pedidos Ignorados",
+        df=pd.DataFrame(columns=COLUNAS_PEDIDOS_IGNORADOS)
+    )
+
+    ids_ignorados = set()
+
+    def identificar_motivo(row):
+        if pd.notna(row.get("Cancelled At")):
+            return "cancelado"
+        if row.get("Total Refunded", 0) >= row.get("Valor Total", 0):
+            return "reembolso"
+        return "outro"
+
+
     # 🔑 PUXAR DO MAIS ANTIGO → MAIS RECENTE
     for lote in puxar_pedidos_pagos_em_lotes(
         lote_tamanho=lote_tamanho,
         data_inicio="2023-01-01T00:00:00-03:00",
         ordem="asc"
     ):
-        todos_pedidos.extend(lote)
+        df = pd.DataFrame(lote)
+
+        df["Pedido ID"] = (
+            df["Pedido ID"]
+            .astype(str)
+            .str.replace(".0", "", regex=False)
+            .str.strip()
+        )
+        
+        if df.empty:
+            continue
+
+        # ==============================
+        # 🚫 CANCELADOS / REEMBOLSADOS
+        # ==============================
+        df_cancelados = df[
+            (df.get("Cancelled At").notna()) |
+            (df.get("Total Refunded", 0) >= df.get("Valor Total", 0))
+        ].copy()
+
+        if not df_cancelados.empty:
+            df_cancelados["Motivo Ignorado"] = df_cancelados.apply(
+                identificar_motivo,
+                axis=1
+            )
+
+            df_cancelados = df_cancelados[
+                ~df_cancelados["Pedido ID"].isin(ids_ignorados)
+            ]
+
+            if not df_cancelados.empty:
+                df_cancelados["Data de criação"] = (
+                    pd.to_datetime(
+                        df_cancelados["Data de criação"],
+                        errors="coerce",
+                        utc=True
+                    )
+                    .dt.tz_convert("America/Sao_Paulo")
+                    .dt.tz_localize(None)
+                    .dt.strftime("%Y-%m-%d %H:%M:%S")
+                )
+
+                df_cancelados = df_cancelados[COLUNAS_PEDIDOS_IGNORADOS]
+
+                append_aba(
+                    planilha=nome_planilha,
+                    aba="Pedidos Ignorados",
+                    df=df_cancelados
+                )
+
+                ids_ignorados.update(df_cancelados["Pedido ID"])
+
+        # ==============================
+        # ✅ PEDIDOS VÁLIDOS
+        # ==============================
+        df_validos = df[
+            (df.get("Cancelled At").isna()) &
+            (df.get("Total Refunded", 0) < df.get("Valor Total", 0))
+        ]
+
+        if not df_validos.empty:
+            todos_pedidos.extend(df_validos.to_dict("records"))
+
 
     if not todos_pedidos:
         return {

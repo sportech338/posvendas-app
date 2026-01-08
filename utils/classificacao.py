@@ -273,8 +273,8 @@ def calcular_ciclo_medio(df_clientes: pd.DataFrame) -> Dict:
     ciclo_media = clientes_recorrentes["Ciclo_Medio"].mean()
     
     # Calcular thresholds sugeridos
-    threshold_ativo = int(ciclo_mediana * 1.5)
-    threshold_risco = int(ciclo_mediana * 3)
+    threshold_ativo = max(30, int(ciclo_mediana * 1.5))
+    threshold_risco = max(90, int(ciclo_mediana * 3))
     
     return {
         "ciclo_mediana": round(ciclo_mediana, 1),

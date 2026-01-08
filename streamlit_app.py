@@ -98,11 +98,6 @@ except Exception as e:
     st.error(f"❌ Erro ao carregar dados: {str(e)}")
     st.info("💡 Execute a sincronização primeiro para criar a aba 'Clientes Shopify'")
     st.stop()
-    
-df["Último Pedido"] = pd.to_datetime(
-    df["Último Pedido"],
-    errors="coerce",
-)
 
 if df.empty:
     st.warning("⚠️ Nenhum cliente encontrado. Execute a sincronização primeiro.")
@@ -271,7 +266,6 @@ def formatar_tabela(df_input: pd.DataFrame) -> pd.DataFrame:
         pd.to_datetime(
             df_input["Último Pedido"],
             errors="coerce",
-            dayfirst=True
         )
         .dt.strftime("%d/%m/%Y %H:%M")
         .fillna("-")
